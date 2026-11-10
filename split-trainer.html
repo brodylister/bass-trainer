@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Bass Split Trainer | Bass Trainer</title>
+<meta name="description" content="Practice reading your part out of marching bass drum split music.">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@600;700&display=swap">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<main class="app">
+  <nav class="site-nav" aria-label="Modules">
+    <span class="brand">Bass Trainer</span>
+    <div class="nav-links">
+      <a href="index.html">Box-Cooldown</a>
+      <a href="split-trainer.html" aria-current="page">Split Trainer</a>
+    </div>
+  </nav>
+
+  <header class="top">
+    <h1>Bass Split Trainer</h1>
+    <dl class="stats">
+      <div><dt>Streak</dt><dd id="stat-streak">0</dd></div>
+      <div><dt>Score</dt><dd id="stat-score">0/0</dd></div>
+      <div id="timer-wrap"><dt>Time</dt><dd id="stat-timer">0.0 s</dd></div>
+    </dl>
+  </header>
+
+  <div class="sheet-wrap">
+    <section class="sheet" tabindex="0" aria-label="Bar of music"><div id="staff"></div></section>
+    <p class="hint" id="scroll-hint" hidden>Swipe the music sideways to see the whole bar, or turn your phone.</p>
+  </div>
+
+  <p class="prompt">Tap every count <strong id="target">Bass 1</strong> plays in this bar.</p>
+
+  <div class="pad" id="pad"></div>
+
+  <p class="feedback" id="feedback" role="status" hidden></p>
+
+  <button class="action" id="action" type="button" disabled>Check</button>
+
+  <dl class="stats legend">
+    <div><dt>Best streak</dt><dd id="stat-beststreak">0</dd></div>
+    <div id="best-wrap"><dt>Fastest correct</dt><dd id="stat-best">none yet</dd></div>
+  </dl>
+
+  <details class="options" id="options">
+    <summary>Options</summary>
+    <div class="options-body">
+      <fieldset>
+        <legend>Which drum to quiz</legend>
+        <div class="seg">
+          <label><input type="radio" name="drum" id="drum-random" value="random"><span>Random</span></label>
+          <label><input type="radio" name="drum" id="drum-1" value="0"><span>1</span></label>
+          <label><input type="radio" name="drum" id="drum-2" value="1"><span>2</span></label>
+          <label><input type="radio" name="drum" id="drum-3" value="2"><span>3</span></label>
+          <label><input type="radio" name="drum" id="drum-4" value="3"><span>4</span></label>
+          <label><input type="radio" name="drum" id="drum-5" value="4"><span>5</span></label>
+        </div>
+      </fieldset>
+      <fieldset>
+        <legend>Level</legend>
+        <div class="seg seg-even">
+          <label><input type="radio" name="level" id="level-1" value="1"><span>1</span></label>
+          <label><input type="radio" name="level" id="level-2" value="2"><span>2</span></label>
+          <label><input type="radio" name="level" id="level-3" value="3"><span>3</span></label>
+          <label><input type="radio" name="level" id="level-4" value="4"><span>4</span></label>
+        </div>
+        <p class="hint" id="level-note"></p>
+      </fieldset>
+      <fieldset>
+        <legend>Rhythms in the bar</legend>
+        <div class="checks">
+          <label><input type="checkbox" id="opt-s"><span>Sixteenth notes<small>Counted 1 e + a</small></span></label>
+          <label><input type="checkbox" id="opt-t"><span>Eighth-note triplets<small>Counted 1 pul let</small></span></label>
+          <label><input type="checkbox" id="opt-x"><span>Sextuplets<small>Counted 1 pul let + pul let</small></span></label>
+          <label><input type="checkbox" id="opt-unisons"><span>Unisons and stacks<small>A slash means all five drums; stacked notes mean two or three</small></span></label>
+        </div>
+      </fieldset>
+      <fieldset>
+        <legend>Help and timing</legend>
+        <div class="checks">
+          <label><input type="checkbox" id="opt-highlight"><span>Highlight my drum<small>Colours your notes on the sheet before you answer</small></span></label>
+          <label><input type="checkbox" id="opt-timer"><span>Time my answers<small>Shows a timer and keeps your fastest correct answer</small></span></label>
+        </div>
+      </fieldset>
+    </div>
+  </details>
+
+  <footer class="site-footer">
+    <p>Designed by Brody Lister and created with Claude Fable (Anthropic). Special thanks to Maddox Lister and William Lienhard.</p>
+    <p>Inspired by <a href="https://repsimulator.com" rel="noopener">repsimulator.com</a> created by Aaron Battle. The design was created from original descriptions and direction, and no site was intentionally copied. Any resemblance to other work is unintentional.</p>
+    <p>These tools are shared for free and for the betterment of music education, not sold or marketed commercially. Anyone may use or adapt them at no cost for non-commercial purposes, provided they credit Brody Lister. Please keep this acknowledgement, or a clear equivalent, in the footer of any copy. They are provided as is, with no warranty. See the license (CC BY-NC 4.0) at <a href="https://github.com/brodylister/bass-trainer/blob/main/LICENSE" rel="noopener">github.com/brodylister/bass-trainer/blob/main/LICENSE</a>.</p>
+  </footer>
+</main>
+
+<script src="vendor/vexflow-bravura.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

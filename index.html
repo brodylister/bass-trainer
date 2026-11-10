@@ -3,85 +3,99 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Bass Split Trainer</title>
-<meta name="description" content="Practice reading your part out of marching bass drum split music.">
+<title>Box-Cooldown Sandbox | Bass Trainer</title>
+<meta name="description" content="See rhythm as boxes: a green line for each hit and a red cooldown for the wait before the next note. Cut, fuse and hear any bar.">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@600;700&display=swap">
 <link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="sandbox.css">
 </head>
 <body>
-<main class="app">
+<main class="app has-toolbar">
+  <nav class="site-nav" aria-label="Modules">
+    <span class="brand">Bass Trainer</span>
+    <div class="nav-links">
+      <a href="index.html" aria-current="page">Box-Cooldown</a>
+      <a href="split-trainer.html">Split Trainer</a>
+    </div>
+  </nav>
+
   <header class="top">
-    <h1>Bass Split Trainer</h1>
-    <dl class="stats">
-      <div><dt>Streak</dt><dd id="stat-streak">0</dd></div>
-      <div><dt>Score</dt><dd id="stat-score">0/0</dd></div>
-      <div id="timer-wrap"><dt>Time</dt><dd id="stat-timer">0.0 s</dd></div>
-    </dl>
+    <h1>Box-Cooldown Sandbox</h1>
   </header>
 
   <div class="sheet-wrap">
-    <section class="sheet" tabindex="0" aria-label="Bar of music"><div id="staff"></div></section>
+    <section class="sheet sheet-live" id="sheet" aria-label="Bar of music. Tap a note to use the current tool on it."><div id="staff"></div></section>
     <p class="hint" id="scroll-hint" hidden>Swipe the music sideways to see the whole bar, or turn your phone.</p>
   </div>
 
-  <p class="prompt">Tap every count <strong id="target">Bass 1</strong> plays in this bar.</p>
-
-  <div class="pad" id="pad"></div>
-
-  <p class="feedback" id="feedback" role="status" hidden></p>
-
-  <button class="action" id="action" type="button" disabled>Check</button>
-
-  <dl class="stats legend">
-    <div><dt>Best streak</dt><dd id="stat-beststreak">0</dd></div>
-    <div id="best-wrap"><dt>Fastest correct</dt><dd id="stat-best">none yet</dd></div>
-  </dl>
-
-  <details class="options" id="options">
-    <summary>Options</summary>
-    <div class="options-body">
-      <fieldset>
-        <legend>Which drum to quiz</legend>
-        <div class="seg">
-          <label><input type="radio" name="drum" id="drum-random" value="random"><span>Random</span></label>
-          <label><input type="radio" name="drum" id="drum-1" value="0"><span>1</span></label>
-          <label><input type="radio" name="drum" id="drum-2" value="1"><span>2</span></label>
-          <label><input type="radio" name="drum" id="drum-3" value="2"><span>3</span></label>
-          <label><input type="radio" name="drum" id="drum-4" value="3"><span>4</span></label>
-          <label><input type="radio" name="drum" id="drum-5" value="4"><span>5</span></label>
-        </div>
-      </fieldset>
-      <fieldset>
-        <legend>Level</legend>
-        <div class="seg seg-even">
-          <label><input type="radio" name="level" id="level-1" value="1"><span>1</span></label>
-          <label><input type="radio" name="level" id="level-2" value="2"><span>2</span></label>
-          <label><input type="radio" name="level" id="level-3" value="3"><span>3</span></label>
-          <label><input type="radio" name="level" id="level-4" value="4"><span>4</span></label>
-        </div>
-        <p class="hint" id="level-note"></p>
-      </fieldset>
-      <fieldset>
-        <legend>Rhythms in the bar</legend>
-        <div class="checks">
-          <label><input type="checkbox" id="opt-s"><span>Sixteenth notes<small>Counted 1 e + a</small></span></label>
-          <label><input type="checkbox" id="opt-t"><span>Eighth-note triplets<small>Counted 1 pul let</small></span></label>
-          <label><input type="checkbox" id="opt-x"><span>Sextuplets<small>Counted 1 pul let + pul let</small></span></label>
-          <label><input type="checkbox" id="opt-unisons"><span>Unisons and stacks<small>A slash means all five drums; stacked notes mean two or three</small></span></label>
-        </div>
-      </fieldset>
-      <fieldset>
-        <legend>Help and timing</legend>
-        <div class="checks">
-          <label><input type="checkbox" id="opt-highlight"><span>Highlight my drum<small>Colours your notes on the sheet before you answer</small></span></label>
-          <label><input type="checkbox" id="opt-timer"><span>Time my answers<small>Shows a timer and keeps your fastest correct answer</small></span></label>
-        </div>
-      </fieldset>
+  <div class="transport" role="group" aria-label="Playback">
+    <button class="play" id="play" type="button" aria-pressed="false">
+      <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path id="play-icon" d="M7 4.5v15l12.5-7.5z" fill="currentColor"/></svg>
+      <span id="play-label">Play</span>
+    </button>
+    <label class="tempo">
+      <span><span id="tempo-value">80</span> bpm</span>
+      <input type="range" id="tempo" min="40" max="160" step="1" value="80" aria-label="Tempo in beats per minute">
+    </label>
+    <div class="toggles">
+      <label><input type="checkbox" id="opt-met" checked><span>Met</span></label>
+      <label><input type="checkbox" id="opt-loop" checked><span>Loop</span></label>
+      <label><input type="checkbox" id="opt-countin" checked><span>Count-in</span></label>
     </div>
-  </details>
+  </div>
+
+  <section class="boxes-wrap" aria-label="Box-cooldown view">
+    <div class="boxes" id="boxes"></div>
+    <ul class="key">
+      <li><i class="k k-hit"></i>Hit</li>
+      <li><i class="k k-cool"></i>Wait after the hit</li>
+      <li><i class="k k-rest"></i>Rest</li>
+      <li><i class="k k-beat"></i>One beat</li>
+    </ul>
+    <p class="hint" id="tool-hint"></p>
+    <p class="cue" id="cue" role="status" hidden></p>
+  </section>
+
+  <section class="counts" aria-labelledby="counts-title">
+    <h2 id="counts-title">Counts in this bar</h2>
+    <div class="count-chips" id="count-chips"></div>
+    <p class="visually-hidden" id="count-text" aria-live="polite"></p>
+  </section>
+
+  <section class="examples" aria-labelledby="examples-title">
+    <h2 id="examples-title">Examples</h2>
+    <div class="example-grid" id="example-grid"></div>
+    <button class="ghost" id="randomize" type="button">Randomize</button>
+    <p class="example-note" id="example-note"></p>
+  </section>
+
+  <footer class="site-footer">
+    <p>Designed by Brody Lister and created with Claude Fable (Anthropic). Special thanks to Maddox Lister and William Lienhard.</p>
+    <p>Inspired by <a href="https://repsimulator.com" rel="noopener">repsimulator.com</a> created by Aaron Battle. The design was created from original descriptions and direction, and no site was intentionally copied. Any resemblance to other work is unintentional.</p>
+    <p>These tools are shared for free and for the betterment of music education, not sold or marketed commercially. Anyone may use or adapt them at no cost for non-commercial purposes, provided they credit Brody Lister. Please keep this acknowledgement, or a clear equivalent, in the footer of any copy. They are provided as is, with no warranty. See the license (CC BY-NC 4.0) at <a href="https://github.com/brodylister/bass-trainer/blob/main/LICENSE" rel="noopener">github.com/brodylister/bass-trainer/blob/main/LICENSE</a>.</p>
+  </footer>
 </main>
 
+<div class="toolbar" role="toolbar" aria-label="Tools">
+  <button type="button" class="tool" id="tool-cut2" data-tool="cut2" aria-pressed="true" aria-label="Cut in 2: tapping a box cuts it in half">
+    <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" class="scissors"><circle cx="6" cy="6.5" r="3"/><circle cx="6" cy="17.5" r="3"/><path d="M8.4 8.3 21 19M8.4 15.7 21 5"/></svg><b>2</b>
+  </button>
+  <button type="button" class="tool" id="tool-cut3" data-tool="cut3" aria-pressed="false" aria-label="Cut in 3: tapping a box cuts it into a triplet">
+    <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" class="scissors"><circle cx="6" cy="6.5" r="3"/><circle cx="6" cy="17.5" r="3"/><path d="M8.4 8.3 21 19M8.4 15.7 21 5"/></svg><b>3</b>
+  </button>
+  <button type="button" class="tool" id="tool-toggle" data-tool="toggle" aria-pressed="false" aria-label="Note or rest: tapping a box switches it between a note and a rest">
+    <span class="glyphs" id="noterest-icon" aria-hidden="true"></span>
+  </button>
+  <span class="divider" aria-hidden="true"></span>
+  <button type="button" class="tool tool-plain" id="undo" aria-label="Undo" disabled>
+    <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" class="stroke"><path d="M8 6 3.5 10.5 8 15"/><path d="M3.5 10.5H14a5.5 5.5 0 0 1 0 11h-3"/></svg>
+  </button>
+  <button type="button" class="tool tool-plain" id="redo" aria-label="Redo" disabled>
+    <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" class="stroke"><path d="M16 6l4.5 4.5L16 15"/><path d="M20.5 10.5H10a5.5 5.5 0 0 0 0 11h3"/></svg>
+  </button>
+</div>
+
 <script src="vendor/vexflow-bravura.js"></script>
-<script src="app.js"></script>
+<script src="sandbox.js"></script>
 </body>
 </html>
