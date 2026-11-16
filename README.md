@@ -12,6 +12,7 @@ Open `index.html` in a browser, or publish with GitHub Pages (Settings > Pages >
 - `index.html`, `sandbox.css`, `sandbox.js`: the Box-Cooldown Sandbox.
 - `split-trainer.html`, `app.js`: the Bass Split Trainer.
 - `style.css`: shared layout, navigation and footer.
+- `analytics.js`: anonymous visit counting with [GoatCounter](https://www.goatcounter.com) (no cookies). If you reuse this site, change the GoatCounter code at the top of the file to your own, or delete the file's script tag from both pages to turn counting off.
 - `vendor/vexflow-bravura.js`: VexFlow 4.2.2, which draws the notation in the Bravura music font.
 
 There is no build step.
