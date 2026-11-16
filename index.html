@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Box-Cooldown Sandbox | Bass Trainer</title>
+<title>Rhythm Sandbox | Bass Trainer</title>
 <meta name="description" content="See rhythm as boxes: a green line for each hit and a red cooldown for the wait before the next note. Cut, fuse and hear any bar.">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@600;700&display=swap">
 <link rel="stylesheet" href="style.css">
@@ -14,13 +14,16 @@
   <nav class="site-nav" aria-label="Modules">
     <span class="brand">Bass Trainer</span>
     <div class="nav-links">
-      <a href="index.html" aria-current="page">Box-Cooldown</a>
-      <a href="split-trainer.html">Split Trainer</a>
+      <a href="index.html" aria-current="page">Rhythm Sandbox</a>
+      <a href="split-trainer.html">Written Split Quiz</a>
+      <a href="split-sandbox.html">Split Sandbox</a>
+      <a href="rudiment-quiz.html">Rudiment Quiz</a>
+      <a href="discrepancy-quiz.html">Discrepancy Quiz</a>
     </div>
   </nav>
 
   <header class="top">
-    <h1>Box-Cooldown Sandbox</h1>
+    <h1>Rhythm Sandbox</h1>
   </header>
 
   <div class="sheet-wrap">
@@ -72,7 +75,7 @@
   <footer class="site-footer">
     <p>Designed by Brody Lister and created with Claude Fable (Anthropic). Special thanks to Maddox Lister and William Lienhard.</p>
     <p>Inspired by <a href="https://repsimulator.com" rel="noopener">repsimulator.com</a> created by Aaron Battle. The design was created from original descriptions and direction, and no site was intentionally copied. Any resemblance to other work is unintentional.</p>
-    <p>These tools are shared for free and for the betterment of music education, not sold or marketed commercially. Anyone may use or adapt them at no cost for non-commercial purposes, provided they credit Brody Lister. Please keep this acknowledgement, or a clear equivalent, in the footer of any copy. They are provided as is, with no warranty. See the license (CC BY-NC 4.0) at <a href="https://github.com/brodylister/bass-trainer/blob/main/LICENSE" rel="noopener">github.com/brodylister/bass-trainer/blob/main/LICENSE</a>.</p>
+    <p>These tools are shared for free and for the betterment of music education, not sold or marketed commercially. Anyone may use or adapt them at no cost for non-commercial purposes, provided they credit the authors. Please keep this acknowledgement, or a clear equivalent, in the footer of any copy. They are provided as is, with no warranty. See the license (CC BY-NC 4.0) at <a href="https://github.com/brodylister/bass-trainer/blob/main/LICENSE" rel="noopener">github.com/brodylister/bass-trainer/blob/main/LICENSE</a>.</p>
     <p>Visits to this site are counted with <a href="https://goatcounter.com/privacy" rel="noopener">GoatCounter</a>, which sets no cookies and does not store IP addresses. Your answers and scores stay in your browser.</p>
   </footer>
 </main>
@@ -97,6 +100,7 @@
 </div>
 
 <script src="vendor/vexflow-bravura.js"></script>
+<script src="rhythm-model.js"></script>
 <script src="sandbox.js"></script>
 <script src="analytics.js"></script>
 </body>

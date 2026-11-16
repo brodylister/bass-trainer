@@ -1,0 +1,113 @@
+/* The five-drum listening modules: Split Sandbox, Auditory Rudiment Quiz, Discrepancy Quiz.
+   Loaded after style.css and sandbox.css, and uses their colours, buttons and tools. */
+
+/* ----- Split Sandbox: a board that can be dragged any way, with tools floating over it ----- */
+.app-board { max-width: 1100px; }
+.app-board .top .hint { margin: 0; }
+.board-wrap { position: relative; }
+.board {
+  height: calc(100vh - 150px); height: calc(100dvh - 150px); min-height: 420px;
+  overflow: auto; -webkit-overflow-scrolling: touch; overscroll-behavior-x: contain;
+  background-color: var(--paper);
+  background-image: radial-gradient(circle, #c9cfda 1.1px, transparent 1.3px);
+  background-size: 26px 26px; background-attachment: local;
+  border: 1px solid var(--line); border-radius: 10px;
+}
+.board:focus-visible { outline-offset: -2px; }
+/* Room on every side, so the music can be pushed around like paper on a desk. */
+.canvas { display: inline-block; padding: 190px 70vw 60vh max(20px, calc(50% - 330px)); min-width: 100%; }
+.system { display: flex; align-items: flex-start; width: max-content; background: var(--paper); box-shadow: 0 0 0 14px var(--paper); border-radius: 2px; }
+.bar { flex: none; }
+.bar svg { display: block; }
+.board .zone { cursor: pointer; outline: none; }
+.board .zone:focus-visible { fill: rgba(31, 79, 216, 0.12); stroke: var(--accent, #1f4fd8); stroke-width: 2; }
+
+.floatbar { position: absolute; left: 0; right: 0; z-index: 5; display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 0 8px; pointer-events: none; }
+.floatbar-top { top: 10px; }
+.floatbar-bottom { bottom: 12px; }
+.strip {
+  pointer-events: auto; display: flex; align-items: center; gap: 4px; padding: 6px; border-radius: 16px;
+  background: var(--surface); border: 1px solid var(--line); box-shadow: var(--bar-shadow); max-width: 100%;
+}
+.strip .tool { min-width: 44px; height: 46px; padding: 0 6px; }
+.strip .tool-plain { min-width: 40px; }
+.strip .tool-drum { min-width: 42px; }
+.transport-strip { gap: 10px; padding: 6px 10px 6px 6px; position: relative; }
+.transport-strip .play { height: 42px; min-width: 96px; }
+.transport-strip .tempo { width: 130px; }
+.board-cue { pointer-events: auto; max-width: min(560px, 100%); box-shadow: var(--bar-shadow); }
+
+.more summary {
+  list-style: none; cursor: pointer; height: 34px; padding: 0 12px; display: flex; align-items: center;
+  border: 1.5px solid var(--line); border-radius: 999px; font-size: 0.85rem; font-weight: 500; color: var(--muted);
+}
+.more summary::-webkit-details-marker { display: none; }
+.more[open] summary { border-color: var(--accent); color: var(--accent); }
+.more-body {
+  position: absolute; right: 0; top: calc(100% + 6px); z-index: 6; width: min(300px, calc(100vw - 32px));
+  display: flex; flex-direction: column; gap: 12px; padding: 12px; border-radius: 14px;
+  background: var(--surface); border: 1px solid var(--line); box-shadow: var(--bar-shadow);
+}
+.stepper { display: flex; align-items: center; gap: 8px; font-size: 0.9rem; color: var(--muted); }
+.stepper span { flex: 1; }
+.stepper b { min-width: 1.2em; text-align: center; color: var(--fg); font: 700 1rem/1 var(--font-display); }
+.stepper button {
+  width: 40px; height: 36px; border: 1.5px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--fg);
+  font: 600 1.1rem/1 var(--font-display); cursor: pointer; touch-action: manipulation;
+}
+.stepper button:disabled { opacity: 0.35; cursor: default; }
+
+@media (max-width: 420px) {
+  .strip { gap: 2px; padding: 5px; }
+  .strip .tool { min-width: 40px; }
+  .strip .tool-plain { min-width: 36px; }
+  .strip .divider { margin: 0; }
+  .transport-strip .tempo { width: 104px; }
+}
+
+/* ----- listening quizzes ----- */
+.listen {
+  position: sticky; top: 8px; z-index: 5; display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  padding: 8px; border-radius: 14px; background: var(--surface); border: 1px solid var(--line); box-shadow: var(--bar-shadow);
+}
+.listen .play { min-width: 132px; }
+.play-quiet { background: transparent; color: var(--accent); border: 1.5px solid var(--accent); padding: 0 14px; justify-content: center; }
+.play-quiet[aria-pressed="true"] { background: var(--fg); color: var(--bg); border-color: var(--fg); }
+.listen-note { display: flex; flex-direction: column; margin-left: auto; text-align: right; font-size: 0.78rem; line-height: 1.3; color: var(--muted); font-variant-numeric: tabular-nums; }
+
+.sheet-bars { display: flex; flex-direction: column; }
+.staff-line svg { display: block; margin: 0 auto; }
+
+.choices { display: grid; gap: 10px; }
+.choices-text { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.choice {
+  position: relative; display: flex; flex-direction: column; align-items: stretch; gap: 2px; min-width: 0;
+  padding: 8px; border: 2px solid var(--line); border-radius: 10px; background: var(--surface); color: var(--fg);
+  font: inherit; text-align: left; cursor: pointer; touch-action: manipulation; -webkit-tap-highlight-color: transparent;
+}
+.choice-tag {
+  position: absolute; top: 6px; left: 6px; z-index: 1; width: 24px; height: 24px; display: flex; align-items: center; justify-content: center;
+  border-radius: 50%; background: var(--bg); color: var(--muted); font: 700 0.8rem/1 var(--font-display);
+}
+/* The music itself stays on paper-white in both themes, like the main sheet. */
+.choice-music { background: var(--paper); border-radius: 6px; overflow-x: auto; }
+.choice-name { align-self: center; font: 600 0.92rem/1.3 var(--font-display); padding: 4px 0 2px; }
+.choice-text { display: flex; flex-direction: column; gap: 4px; padding: 6px 4px 6px 34px; min-height: 44px; justify-content: center; font-weight: 500; }
+.choice.is-on { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent); }
+.choice.is-on .choice-tag { background: var(--accent); color: var(--accent-fg); }
+.choice:disabled { cursor: default; }
+.choice.is-right { border-color: var(--good); box-shadow: 0 0 0 2px var(--good); background: var(--good-bg); }
+.choice.is-right .choice-tag { background: var(--good); color: var(--good-bg); }
+.choice.is-wrong { border-color: var(--bad); border-style: dashed; background: var(--bad-bg); }
+.choice.is-wrong .choice-tag { background: var(--bad); color: var(--bad-bg); }
+
+.seg-wrap { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.seg-wrap span { font-size: 0.92rem; }
+
+@media (min-width: 700px) {
+  .choices-music { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .seg-wrap { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}
+@media (max-width: 420px) {
+  .choices-text { grid-template-columns: 1fr; }
+}

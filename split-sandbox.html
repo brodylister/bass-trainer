@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Split Sandbox | Bass Trainer</title>
+<meta name="description" content="Write a bass drum split on the staff and hear it straight away on five bass drums.">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@600;700&display=swap">
+<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="sandbox.css">
+<link rel="stylesheet" href="split.css">
+</head>
+<body>
+<main class="app app-board">
+  <nav class="site-nav" aria-label="Modules">
+    <span class="brand">Bass Trainer</span>
+    <div class="nav-links">
+      <a href="index.html">Rhythm Sandbox</a>
+      <a href="split-trainer.html">Written Split Quiz</a>
+      <a href="split-sandbox.html" aria-current="page">Split Sandbox</a>
+      <a href="rudiment-quiz.html">Rudiment Quiz</a>
+      <a href="discrepancy-quiz.html">Discrepancy Quiz</a>
+    </div>
+  </nav>
+
+  <header class="top">
+    <h1>Split Sandbox</h1>
+    <p class="hint">Headphones recommended.</p>
+  </header>
+
+  <div class="board-wrap">
+    <div class="floatbar floatbar-top">
+      <div class="strip transport-strip">
+        <button class="play" id="play" type="button" aria-pressed="false">
+      <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path id="play-icon" d="M7 4.5v15l12.5-7.5z" fill="currentColor"/></svg>
+      <span id="play-label">Play</span>
+    </button>
+        <label class="tempo">
+          <span><span id="tempo-value">96</span> bpm</span>
+          <input type="range" id="tempo" min="40" max="160" step="1" value="96" aria-label="Tempo in beats per minute">
+        </label>
+        <details class="more" id="more">
+          <summary aria-label="More controls">More</summary>
+          <div class="more-body">
+            <div class="toggles">
+              <label><input type="checkbox" id="opt-met" checked><span>Met</span></label>
+              <label><input type="checkbox" id="opt-loop" checked><span>Loop</span></label>
+              <label><input type="checkbox" id="opt-countin"><span>Count-in</span></label>
+            </div>
+            <div class="stepper" role="group" aria-label="Number of bars">
+              <span>Bars</span>
+              <button type="button" id="bars-less" aria-label="Remove the last bar">&minus;</button>
+              <b id="bars-value">1</b>
+              <button type="button" id="bars-more" aria-label="Add a bar">+</button>
+            </div>
+            <div class="stepper" role="group" aria-label="Zoom">
+              <span>Zoom</span>
+              <button type="button" id="zoom-out" aria-label="Zoom out">&minus;</button>
+              <button type="button" id="zoom-in" aria-label="Zoom in">+</button>
+            </div>
+            <button type="button" class="ghost" id="clear">Start over</button>
+          </div>
+        </details>
+      </div>
+      <div class="strip" role="toolbar" aria-label="Which drum to write on">
+      <button type="button" class="tool tool-drum" data-tool="d1" aria-pressed="false" aria-label="Write on bass 1"><b>1</b></button>
+      <button type="button" class="tool tool-drum" data-tool="d2" aria-pressed="false" aria-label="Write on bass 2"><b>2</b></button>
+      <button type="button" class="tool tool-drum" data-tool="d3" aria-pressed="false" aria-label="Write on bass 3"><b>3</b></button>
+      <button type="button" class="tool tool-drum" data-tool="d4" aria-pressed="false" aria-label="Write on bass 4"><b>4</b></button>
+      <button type="button" class="tool tool-drum" data-tool="d5" aria-pressed="false" aria-label="Write on bass 5"><b>5</b></button>
+      <button type="button" class="tool tool-drum" data-tool="du" aria-pressed="false" aria-label="Write a unison: all five drums">
+        <svg viewBox="0 0 24 24" width="26" height="28" aria-hidden="true"><path d="M6 22v-7L18 2v7z" fill="currentColor"/></svg>
+      </button>
+      </div>
+    </div>
+
+    <section class="board sheet-live" id="board" aria-label="The music. Tap a note to use the current tool on it. Drag to move around.">
+      <div class="canvas" id="canvas"><div class="system" id="system"></div></div>
+    </section>
+
+    <div class="floatbar floatbar-bottom">
+      <p class="cue board-cue" id="cue" role="status" hidden></p>
+      <div class="strip" role="toolbar" aria-label="Tools">
+        <button type="button" class="tool" data-tool="cut2" aria-pressed="true" aria-label="Cut in 2: tapping a note cuts it in half">
+          <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" class="scissors"><circle cx="6" cy="6.5" r="3"/><circle cx="6" cy="17.5" r="3"/><path d="M8.4 8.3 21 19M8.4 15.7 21 5"/></svg><b>2</b>
+        </button>
+        <button type="button" class="tool" data-tool="cut3" aria-pressed="false" aria-label="Cut in 3: tapping a note cuts it into a triplet">
+          <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" class="scissors"><circle cx="6" cy="6.5" r="3"/><circle cx="6" cy="17.5" r="3"/><path d="M8.4 8.3 21 19M8.4 15.7 21 5"/></svg><b>3</b>
+        </button>
+        <button type="button" class="tool" data-tool="toggle" aria-pressed="false" aria-label="Note or rest: tapping switches between a note and a rest">
+          <span class="glyphs" id="noterest-icon" aria-hidden="true"></span>
+        </button>
+        <button type="button" class="tool" data-tool="flam" aria-pressed="false" aria-label="Flam: tapping a note adds or removes a flam">
+          <svg viewBox="0 0 30 28" width="30" height="28" aria-hidden="true"><ellipse cx="6.5" cy="21" rx="3.4" ry="2.5" transform="rotate(-20 6.5 21)" fill="currentColor"/><path d="M9.6 20.5V9M9.6 9c2.6 1 4 2.6 4.2 5M5.5 17.5l8-6" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/><ellipse cx="20.5" cy="21.5" rx="5" ry="3.6" transform="rotate(-20 20.5 21.5)" fill="currentColor"/><path d="M25 20.5V3.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+        </button>
+        <button type="button" class="tool" data-tool="accent" aria-pressed="false" aria-label="Accent: tapping a note adds or removes an accent">
+          <svg viewBox="0 0 24 24" width="24" height="24" aria-hidden="true"><path d="M5 6l14 6-14 6" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
+        <span class="divider" aria-hidden="true"></span>
+        <button type="button" class="tool tool-plain" id="undo" aria-label="Undo" disabled>
+          <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" class="stroke"><path d="M8 6 3.5 10.5 8 15"/><path d="M3.5 10.5H14a5.5 5.5 0 0 1 0 11h-3"/></svg>
+        </button>
+        <button type="button" class="tool tool-plain" id="redo" aria-label="Redo" disabled>
+          <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" class="stroke"><path d="M16 6l4.5 4.5L16 15"/><path d="M20.5 10.5H10a5.5 5.5 0 0 0 0 11h3"/></svg>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <p class="hint" id="tool-hint"></p>
+  <p class="hint">The top row picks the drum a tapped note is written on (keys 1 to 5 and U also work). The bottom row cuts, switches notes and rests, and adds flams and accents. Drag the page to move around.</p>
+
+  <footer class="site-footer">
+    <p>Designed by Brody Lister and created with Claude Fable (Anthropic). Special thanks to Maddox Lister and William Lienhard.</p>
+    <p>Inspired by <a href="https://repsimulator.com" rel="noopener">repsimulator.com</a> created by Aaron Battle. The design was created from original descriptions and direction, and no site was intentionally copied. Any resemblance to other work is unintentional.</p>
+    <p>These tools are shared for free and for the betterment of music education, not sold or marketed commercially. Anyone may use or adapt them at no cost for non-commercial purposes, provided they credit the authors. Please keep this acknowledgement, or a clear equivalent, in the footer of any copy. They are provided as is, with no warranty. See the license (CC BY-NC 4.0) at <a href="https://github.com/brodylister/bass-trainer/blob/main/LICENSE" rel="noopener">github.com/brodylister/bass-trainer/blob/main/LICENSE</a>.</p>
+    <p>Visits to this site are counted with <a href="https://goatcounter.com/privacy" rel="noopener">GoatCounter</a>, which sets no cookies and does not store IP addresses. Your answers and scores stay in your browser.</p>
+  </footer>
+</main>
+
+<script src="vendor/vexflow-bravura.js"></script>
+<script src="rhythm-model.js"></script>
+<script src="bass-voice.js"></script>
+<script src="split-core.js"></script>
+<script src="split-sandbox.js"></script>
+<script src="analytics.js"></script>
+</body>
+</html>

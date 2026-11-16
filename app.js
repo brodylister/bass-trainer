@@ -1,4 +1,4 @@
-/* Bass Split Trainer — sheet music trainer
+/* Written Split Quiz (was the Bass Split Trainer) — sheet music trainer
    Generates one bar of 5-bass split music, engraves it with VexFlow (Bravura),
    and asks which counts/partials one drum plays. */
 (function () {
@@ -88,8 +88,12 @@
 
   /* ---------- settings and stats (kept in this browser only) ---------- */
 
-  var DEFAULTS = { drum: 'random', s: true, t: true, x: false, unisons: true, highlight: false, timer: true, level: 2 };
+  var DEFAULTS = { drum: 'random', s: true, t: true, x: false, unisons: true, highlight: false, timer: false, level: 2, v: 2 };
   var settings = load('bst-settings', DEFAULTS);
+  // The timer used to be on by default. Turn it off once for browsers that saved the old default.
+  try {
+    if (!('v' in JSON.parse(localStorage.getItem('bst-settings') || '{"v":2}'))) { settings.timer = false; save('bst-settings', settings); }
+  } catch (e) { /* storage unavailable */ }
   var record = load('bst-record', { bestStreak: 0, bestTime: null });
   var session = { right: 0, total: 0, streak: 0 };
 

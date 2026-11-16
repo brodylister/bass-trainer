@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Auditory Rudiment Quiz | Bass Trainer</title>
+<meta name="description" content="Hear a bass drum split and pick the sheet music that matches it.">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@600;700&display=swap">
+<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="sandbox.css">
+<link rel="stylesheet" href="split.css">
+</head>
+<body>
+<main class="app">
+  <nav class="site-nav" aria-label="Modules">
+    <span class="brand">Bass Trainer</span>
+    <div class="nav-links">
+      <a href="index.html">Rhythm Sandbox</a>
+      <a href="split-trainer.html">Written Split Quiz</a>
+      <a href="split-sandbox.html">Split Sandbox</a>
+      <a href="rudiment-quiz.html" aria-current="page">Rudiment Quiz</a>
+      <a href="discrepancy-quiz.html">Discrepancy Quiz</a>
+    </div>
+  </nav>
+
+  <header class="top">
+    <h1>Auditory Rudiment Quiz</h1>
+    <dl class="stats">
+      <div><dt>Streak</dt><dd id="stat-streak">0</dd></div>
+      <div><dt>Score</dt><dd id="stat-score">0/0</dd></div>
+      <div id="timer-wrap"><dt>Time</dt><dd id="stat-timer">0.0 s</dd></div>
+    </dl>
+  </header>
+
+  <div class="listen" role="group" aria-label="Playback">
+    <button class="play" id="play" type="button" aria-pressed="false">
+      <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path id="play-icon" d="M7 4.5v15l12.5-7.5z" fill="currentColor"/></svg>
+      <span id="play-label">Play</span>
+    </button>
+    <span class="listen-note"><span id="tempo-note"></span><span>Headphones recommended</span></span>
+  </div>
+  <p class="cue" id="cue" role="status" hidden></p>
+
+  <p class="prompt">Which one did you hear?</p>
+
+  <div class="choices" id="choices"></div>
+
+  <p class="feedback" id="feedback" role="status" hidden></p>
+
+  <button class="action" id="action" type="button" disabled>Check</button>
+
+  <dl class="stats legend">
+    <div><dt>Best streak</dt><dd id="stat-beststreak">0</dd></div>
+    <div id="best-wrap"><dt>Fastest correct</dt><dd id="stat-best">none yet</dd></div>
+  </dl>
+
+  <details class="options" id="options">
+    <summary>Options</summary>
+    <div class="options-body">
+      <fieldset>
+        <legend>Level</legend>
+        <div class="seg seg-even">
+          <label><input type="radio" name="level" value="1"><span>1</span></label>
+          <label><input type="radio" name="level" value="2"><span>2</span></label>
+          <label><input type="radio" name="level" value="3"><span>3</span></label>
+          <label><input type="radio" name="level" value="4"><span>4</span></label>
+        </div>
+        <p class="hint" id="level-note"></p>
+      </fieldset>
+      <fieldset>
+        <legend>Rudiments to hear</legend>
+        <div class="checks">
+          <label><input type="checkbox" id="opt-r_buguduh"><span>Buguduh<small>123 123 or 321 321</small></span></label>
+          <label><input type="checkbox" id="opt-r_laser"><span>Laser Beam<small>1234 1234 or 4321 4321</small></span></label>
+          <label><input type="checkbox" id="opt-r_bunny"><span>Bunny Hop<small>1232 1232 or 3212 3212</small></span></label>
+          <label><input type="checkbox" id="opt-r_single"><span>Single Split<small>1212 or 2121</small></span></label>
+          <label><input type="checkbox" id="opt-r_waterfall"><span>Waterfall<small>123 234, 432 321, 1234 2345 or 5432 4321</small></span></label>
+          <label><input type="checkbox" id="opt-r_twos"><span>Twos<small>Two notes on each drum</small></span></label>
+          <label><input type="checkbox" id="opt-r_threes"><span>Threes<small>Three notes on each drum</small></span></label>
+        </div>
+      </fieldset>
+      <fieldset>
+        <legend>Playback</legend>
+        <div class="checks">
+          <label><input type="checkbox" id="opt-met"><span>Metronome<small>Clicks on each beat while the split plays</small></span></label>
+          <label><input type="checkbox" id="opt-countIn"><span>Count-in<small>Four clicks before the split starts</small></span></label>
+        </div>
+      </fieldset>
+      <fieldset>
+        <legend>Help and timing</legend>
+        <div class="checks">
+          <label><input type="checkbox" id="opt-names"><span>Show rudiment names<small>Under any choice that is one rudiment, or a rudiment plus a note</small></span></label>
+          <label><input type="checkbox" id="opt-timer"><span>Time my answers<small>Starts when the split first plays and keeps your fastest correct answer</small></span></label>
+        </div>
+      </fieldset>
+    </div>
+  </details>
+
+  <footer class="site-footer">
+    <p>Designed by Brody Lister and created with Claude Fable (Anthropic). Special thanks to Maddox Lister and William Lienhard.</p>
+    <p>Inspired by <a href="https://repsimulator.com" rel="noopener">repsimulator.com</a> created by Aaron Battle. The design was created from original descriptions and direction, and no site was intentionally copied. Any resemblance to other work is unintentional.</p>
+    <p>These tools are shared for free and for the betterment of music education, not sold or marketed commercially. Anyone may use or adapt them at no cost for non-commercial purposes, provided they credit the authors. Please keep this acknowledgement, or a clear equivalent, in the footer of any copy. They are provided as is, with no warranty. See the license (CC BY-NC 4.0) at <a href="https://github.com/brodylister/bass-trainer/blob/main/LICENSE" rel="noopener">github.com/brodylister/bass-trainer/blob/main/LICENSE</a>.</p>
+    <p>Visits to this site are counted with <a href="https://goatcounter.com/privacy" rel="noopener">GoatCounter</a>, which sets no cookies and does not store IP addresses. Your answers and scores stay in your browser.</p>
+  </footer>
+</main>
+
+<script src="vendor/vexflow-bravura.js"></script>
+<script src="rhythm-model.js"></script>
+<script src="bass-voice.js"></script>
+<script src="split-core.js"></script>
+<script src="listen-quiz.js"></script>
+<script src="rudiment-quiz.js"></script>
+<script src="analytics.js"></script>
+</body>
+</html>

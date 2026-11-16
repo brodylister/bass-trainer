@@ -1,4 +1,4 @@
-/* Box-Cooldown Sandbox. Time runs left to right; one bar is 48 ticks wide and every box is sized by its length. */
+/* Rhythm Sandbox (the box-cooldown view). Time runs left to right; one bar is 48 ticks wide and every box is sized by its length. */
 :root {
   --hit: #0a6b37;        /* the green line: when the note is struck */
   --cool: #e8695c;       /* the red fill: the wait after the note */

@@ -5,7 +5,7 @@
 //
 // CODE below is the first part of the dashboard address,
 // https://brodylister.goatcounter.com. If you reuse this site, change it to
-// your own GoatCounter code or remove this file's script tag from both pages.
+// your own GoatCounter code or remove this file's script tag from every page.
 // Set to 'YOURCODE' or leave empty, this file does nothing.
 //
 // To leave your own visits out, open the site once with #toggle-goatcounter
