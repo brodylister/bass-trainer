@@ -48,6 +48,14 @@
   </div>
 
   <section class="boxes-wrap" aria-label="Box-cooldown view">
+    <div class="zoom" role="group" aria-label="Box size">
+      <button type="button" id="zoom-out" aria-label="Make the boxes smaller" title="Smaller boxes">
+        <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" class="stroke"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.5 15.5 21 21M7.5 10.5h6"/></svg>
+      </button>
+      <button type="button" id="zoom-in" aria-label="Make the boxes bigger" title="Bigger boxes">
+        <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" class="stroke"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.5 15.5 21 21M7.5 10.5h6M10.5 7.5v6"/></svg>
+      </button>
+    </div>
     <div class="boxes" id="boxes"></div>
     <ul class="key">
       <li><i class="k k-hit"></i>Hit</li>
@@ -56,6 +64,7 @@
       <li><i class="k k-beat"></i>One beat</li>
     </ul>
     <p class="hint" id="boxes-hint" hidden>Swipe the boxes sideways to see the whole row.</p>
+    <p class="hint pinch-hint">Pinch the boxes sideways to make them bigger or smaller.</p>
     <p class="hint" id="tool-hint"></p>
     <p class="cue" id="cue" role="status" hidden></p>
   </section>

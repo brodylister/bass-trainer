@@ -61,7 +61,7 @@
 
   var boxes = parse(EXAMPLES[0].bar);
   var tool = 'cut2', example = 0, past = [], future = [];
-  var prefs = { bpm: 80, met: true, loop: true, countIn: true };
+  var prefs = { bpm: 80, met: true, loop: true, countIn: true, zoom: 1 };
 
   try {
     var saved = JSON.parse(localStorage.getItem('bcs-state') || 'null');
@@ -138,12 +138,44 @@
     return d;
   }
 
-  var MIN_BOX = 22;       // the narrowest a box may get, in pixels, so it can still be tapped
+  var MIN_BOX = 22;       // the narrowest a box gets before anyone zooms, in pixels, so it can still be tapped
+  var LANE = 15;          // height of the lane that holds a nested tuplet's number
+
+  /* The scale. Every row gets the same width, so a beat is the same size everywhere in the bar.
+     Unzoomed, the rows fill the screen, or grow wider and scroll if the shortest note in the bar would
+     otherwise be too narrow to tap. prefs.zoom multiplies that; it stops at "fits the screen" on the way out. */
+  function scale() {
+    var wide = $('boxes').clientWidth || 1, span = rows[0][1] - rows[0][0], smallest = span;
+    boxes.forEach(function (b) { smallest = Math.min(smallest, b.d); });
+    var base = Math.max(wide, Math.ceil(MIN_BOX * span / smallest));
+    var most = Math.max(4 * wide, Math.ceil(4 * MIN_BOX * span / smallest));
+    return { wide: wide, base: base, lo: wide / base, hi: most / base };
+  }
+  function applyScale() {
+    var host = $('boxes'), sc = scale();
+    prefs.zoom = Math.min(sc.hi, Math.max(sc.lo, Number(prefs.zoom) || 1));
+    var w = Math.round(sc.base * prefs.zoom), scrolled = w > sc.wide;
+    Array.prototype.forEach.call(host.querySelectorAll('.row'), function (row) { row.style.width = scrolled ? w + 'px' : ''; });
+    host.classList.toggle('is-wide', scrolled);
+    $('boxes-hint').hidden = !scrolled;
+    $('zoom-out').disabled = prefs.zoom <= sc.lo * 1.001;
+    $('zoom-in').disabled = prefs.zoom >= sc.hi * 0.999;
+    return scrolled ? w : sc.wide;
+  }
+  // Zoom to a new factor, keeping the moment under clientX (the pinch, or the middle of the view) where it is.
+  function zoomTo(z, clientX) {
+    var host = $('boxes'), rc = host.getBoundingClientRect();
+    var x = clientX === undefined ? rc.width / 2 : Math.min(rc.width, Math.max(0, clientX - rc.left));
+    var row = host.querySelector('.row'), before = row ? row.getBoundingClientRect().width : rc.width;
+    var at = (host.scrollLeft + x) / before;
+    prefs.zoom = z;
+    host.scrollLeft = at * applyScale() - x;
+  }
 
   function renderBoxes() {
     var host = $('boxes'), focus = document.activeElement && document.activeElement.classList.contains('box')
       ? Number(document.activeElement.dataset.i) : null;
-    var wide = host.clientWidth, scrolled = false;
+    var wide = host.clientWidth;
     rows = wide < 560 ? [[0, BAR / 2], [BAR / 2, BAR]] : [[0, BAR]];   // narrow screens: two beats per row
     host.innerHTML = '';
     rows.forEach(function (r) {
@@ -151,11 +183,6 @@
       var pct = function (tick) { return ((tick - r[0]) / span * 100) + '%'; };
       var clip = function (s, d) { return [Math.max(s, r[0]), Math.min(s + d, r[1])]; };
       row.dataset.s = r[0]; row.dataset.e = r[1];
-      // A row with very short notes grows wider than the screen and scrolls, so every box stays big enough to tap.
-      var smallest = span;
-      boxes.forEach(function (b) { var c = clip(b.s, b.d); if (c[1] > c[0]) smallest = Math.min(smallest, b.d); });
-      var need = Math.ceil(MIN_BOX * span / smallest);
-      if (need > wide) { row.style.width = need + 'px'; scrolled = true; }
 
       for (var beat = r[0] / BEAT; beat < r[1] / BEAT; beat++) {
         var bg = el('beat', row);
@@ -172,7 +199,7 @@
           seen[key] = true;
           var shade = el('tup' + (depth ? ' tup-in' : ''), row);
           shade.style.left = pct(c[0]); shade.style.width = ((c[1] - c[0]) / span * 100) + '%';
-          if (depth) shade.style.top = (18 + Math.min(depth, 3) * 3) + 'px';
+          if (depth) shade.style.top = (21 + (depth - 1) * LANE) + 'px';   // its number sits in a lane of its own, above the boxes
           if (c[0] === t[0]) {
             var tag = shade.appendChild(document.createElement('b'));
             tag.textContent = M.shown(boxes, chain);
@@ -202,8 +229,11 @@
       }
       el('playhead', row).hidden = true;
     });
-    host.classList.toggle('is-wide', scrolled);
-    $('boxes-hint').hidden = !scrolled;
+    // Each layer of nesting gets a lane above the boxes for its number; the boxes keep their height.
+    var deepest = 0;
+    boxes.forEach(function (b) { deepest = Math.max(deepest, b.g.length - 1); });
+    host.style.setProperty('--lanes', (deepest > 0 ? deepest * LANE - 5 : 0) + 'px');
+    applyScale();
     popAt = null;
     if (focus !== null) {
       var again = host.querySelector('.box[role="button"][data-i="' + Math.min(focus, boxes.length - 1) + '"]');
@@ -366,6 +396,33 @@
   window.addEventListener('pointercancel', endPress);
 
   surface($('boxes'), locateBoxes);
+
+  /* ---------- zoom: a sideways pinch on the boxes, the buttons, or ctrl + wheel ---------- */
+
+  var pinch = null;
+  function spread(e) { return Math.max(24, Math.abs(e.touches[0].clientX - e.touches[1].clientX)); }
+  $('boxes').addEventListener('touchstart', function (e) {
+    if (e.touches.length !== 2) { pinch = null; return; }
+    endPress();                                   // two fingers are never a tap or a hold
+    pinch = { spread: spread(e), zoom: prefs.zoom };
+  }, { passive: true });
+  $('boxes').addEventListener('touchmove', function (e) {
+    if (!pinch || e.touches.length !== 2) return;
+    if (e.cancelable) e.preventDefault();         // the boxes resize; the page does not scroll or zoom
+    endPress();
+    zoomTo(pinch.zoom * spread(e) / pinch.spread, (e.touches[0].clientX + e.touches[1].clientX) / 2);
+  }, { passive: false });
+  ['touchend', 'touchcancel'].forEach(function (type) {
+    $('boxes').addEventListener(type, function () { if (pinch) { pinch = null; store(); } });
+  });
+  $('boxes').addEventListener('wheel', function (e) {
+    if (!e.ctrlKey) return;                       // ctrl + wheel, which is also what a trackpad pinch sends
+    e.preventDefault();
+    zoomTo(prefs.zoom * Math.exp(-e.deltaY * 0.01), e.clientX);
+    store();
+  }, { passive: false });
+  $('zoom-in').addEventListener('click', function () { zoomTo(prefs.zoom * 1.25); store(); });
+  $('zoom-out').addEventListener('click', function () { zoomTo(prefs.zoom / 1.25); store(); });
   surface($('sheet'), locateStaff);
 
   // Keyboard: Enter or Space uses the tool on the focused box; Backspace and Delete fuse the cut before or after it.
@@ -593,7 +650,7 @@
     var lastWide = null;
     new ResizeObserver(function () {
       var wide = $('boxes').clientWidth;
-      if (wide !== lastWide) { lastWide = wide; renderBoxes(); }
+      if (wide !== lastWide) { lastWide = wide; renderBoxes(); store(); }
       $('scroll-hint').hidden = $('sheet').scrollWidth <= $('sheet').clientWidth + 1;
     }).observe($('boxes'));
   }
