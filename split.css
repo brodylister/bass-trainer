@@ -111,3 +111,7 @@
 @media (max-width: 420px) {
   .choices-text { grid-template-columns: 1fr; }
 }
+
+/* The Split Sandbox's tool strip anchors the cut picker; the rhythm options sit in the More menu. */
+.floatbar-bottom .strip { position: relative; }
+.more-checks { gap: 8px; font-size: 0.86rem; max-width: 300px; }

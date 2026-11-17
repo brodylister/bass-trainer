@@ -1,4 +1,4 @@
-/* Rhythm Sandbox (the box-cooldown view). Time runs left to right; one bar is 48 ticks wide and every box is sized by its length. */
+/* Rhythm Sandbox (the box-cooldown view). Time runs left to right and every box is sized by its length. */
 :root {
   --hit: #0a6b37;        /* the green line: when the note is struck */
   --cool: #e8695c;       /* the red fill: the wait after the note */
@@ -109,9 +109,16 @@ h2 { font: 600 0.72rem/1.2 var(--font-body); text-transform: uppercase; letter-s
 .k-beat { border: 1.5px dashed var(--beat-line); }
 
 .cue { margin: 0; padding: 9px 12px; border-radius: 8px; background: var(--warn-bg); color: var(--warn); font-size: 0.9rem; font-weight: 500; }
-.cue.soon::before { content: "Coming later"; display: inline-block; margin-right: 8px; padding: 2px 7px; border-radius: 999px; background: var(--warn); color: var(--warn-bg); font-size: 0.7rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; vertical-align: 1px; }
+.cue.soon::before { content: "Option"; display: inline-block; margin-right: 8px; padding: 2px 7px; border-radius: 999px; background: var(--warn); color: var(--warn-bg); font-size: 0.7rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; vertical-align: 1px; }
+
+.cue-action { margin-left: 8px; padding: 4px 10px; border: 1.5px solid currentColor; border-radius: 999px; background: transparent; color: inherit; font: 600 0.82rem/1.2 var(--font-body); cursor: pointer; }
+.boxes.is-wide { overflow-x: auto; touch-action: pan-x pan-y; padding-bottom: 8px; }
+.tup-in b { top: 1px; padding: 0 5px; font-size: 0.66rem; background: none; }
 
 /* ----- counts ----- */
+.chip span span { display: inline; }
+.count sup { font-size: 0.62em; font-weight: 600; color: var(--muted); margin-left: 1px; }
+.count-in { font-size: 0.78em; color: var(--muted); }
 .count-chips { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
 .chip { border: 1.5px solid var(--line); border-radius: 8px; background: var(--surface); padding: 7px 6px; text-align: center; min-width: 0; }
 .chip small { display: block; font-size: 0.68rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; }
@@ -149,6 +156,15 @@ h2 { font: 600 0.72rem/1.2 var(--font-body); text-transform: uppercase; letter-s
 .stroke { fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 .glyphs { display: inline-flex; align-items: center; }
 .glyphs svg { display: block; }
+.cut-more { display: inline-flex; }   /* the picker centres on the whole tool bar, so it never leaves a phone screen */
+.cut-more[hidden] { display: none; }
+.caret { fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; opacity: 0.7; margin-left: 1px; }
+.cut-picker {
+  position: absolute; bottom: calc(100% + 12px); left: 50%; transform: translateX(-50%); z-index: 12;
+  display: flex; gap: 4px; padding: 6px; border-radius: 14px; background: var(--surface); border: 1px solid var(--line); box-shadow: var(--bar-shadow);
+}
+.cut-picker[hidden] { display: none; }
+.cut-picker .pick { min-width: 44px; height: 44px; font: 700 1.1rem/1 var(--font-display); border-color: var(--line); }
 .divider { width: 1px; height: 30px; background: var(--line); margin: 0 2px; }
 
 .visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
@@ -157,6 +173,12 @@ h2 { font: 600 0.72rem/1.2 var(--font-body); text-transform: uppercase; letter-s
   .row { height: 124px; }
   .transport { grid-template-columns: auto minmax(180px, 1fr) auto; }
   .toggles { grid-column: auto; }
+}
+@media (max-width: 420px) {
+  .floatbar-bottom .strip { flex-wrap: wrap; justify-content: center; }
+  .toolbar { gap: 3px; padding: 6px; }
+  .toolbar .tool { min-width: 46px; padding: 0 5px; }
+  .toolbar .tool-plain { min-width: 40px; }
 }
 @media (prefers-reduced-motion: reduce) {
   .box.pop, .cut.is-arming::after { animation: none; }

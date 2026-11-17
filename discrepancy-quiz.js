@@ -47,22 +47,25 @@
     if (settings.rudiment !== 'mix' && S.rudiment(settings.rudiment)) return [S.rudiment(settings.rudiment)];
     return S.RUDIMENTS.slice();
   }
-  function seg(ruds, nBeats, level) {
+  function seg(ruds, nBeats, level, mix) {
+    mix = mix || {};
     for (var tries = 0; tries < 40; tries++) {
       var rud = pick(ruds);
       var grids = level >= 3 && rud.alt.length && Math.random() < 0.3 ? rud.alt : rud.home;
       // Level 1 stays slow: prefer triplets to sextuplets.
       var grid = level === 1 && grids.indexOf('t') !== -1 ? 't' : level === 1 && grids.indexOf('s') !== -1 ? 's' : pick(grids);
-      var beats = S.segment(rud, grid, nBeats);
+      // A rudiment laid over fivelets or sevenlets, or carrying a nested group, when the level and options allow.
+      if (mix.odd && mix.odd.length && Math.random() < 0.2) grid = pick(mix.odd);
+      var beats = S.segment(rud, grid, nBeats, mix.nest && Math.random() < 0.35);
       if (beats) return beats;
     }
     return S.segment(S.rudiment('single'), 's', nBeats);
   }
-  function passageBeats(level, ruds) {
-    if (level < 4) return seg(ruds, 4, level);
+  function passageBeats(level, ruds, mix) {
+    if (level < 4) return seg(ruds, 4, level, mix);
     // Level 4: eight beats, in two or three stretches that may change rudiment, direction or subdivision.
-    return Math.random() < 0.5 ? seg(ruds, 4, 4).concat(seg(ruds, 4, 4))
-      : seg(ruds, 2, 4).concat(seg(ruds, 2, 4), seg(ruds, 4, 4));
+    return Math.random() < 0.5 ? seg(ruds, 4, 4, mix).concat(seg(ruds, 4, 4, mix))
+      : seg(ruds, 2, 4, mix).concat(seg(ruds, 2, 4, mix), seg(ruds, 4, 4, mix));
   }
 
   function key(errors) {
@@ -99,7 +102,13 @@
 
   function generate(settings) {
     var level = Number(settings.level) || 1, ruds = rudiments(settings), types = allowedTypes(settings, level);
-    var beats = passageBeats(level, ruds), bars = S.toBars(beats), want = CHOICES[level];
+    // Fivelets from level 3, sevenlets at level 4, nested groups at level 4 with the option on.
+    var mix = { odd: [].concat(settings.five && level >= 3 ? ['5'] : [], settings.seven && level >= 4 ? ['7'] : []), nest: !!settings.complex && level === 4 };
+    var beats, bars, want = CHOICES[level];
+    for (var go = 0; go < 50; go++) {
+      beats = passageBeats(level, ruds, mix); bars = S.toBars(beats);
+      if (S.barsValid(bars)) break;
+    }
 
     // How many notes each drum plays; a drum needs a few notes for an error to be heard.
     var plays = {};
@@ -177,10 +186,10 @@
   var LEVEL_NOTES = {
     1: 'One slow rudiment with one clear error. Four choices that are easy to tell apart.',
     2: 'One error, a little smaller, sometimes on only some of the drum’s notes. Four choices.',
-    3: 'One or two errors, which can now be about a drum’s sound: ringing, choked or dead. Six choices.',
-    4: 'A longer, quicker passage that may change rudiment, with two or three subtle errors. Eight close choices.'
+    3: 'One or two errors, which can now be about a drum’s sound: ringing, choked or dead. Rudiments may fall on fivelets. Six choices.',
+    4: 'A longer, quicker passage that may change rudiment, on fivelets or sevenlets too, with two or three subtle errors. Eight close choices.'
   };
-  var defaults = { level: 1, rudiment: 'mix', e_time: true, e_vol: true, e_drift: true, e_sound: true, met: true, countIn: true, clean: true, timer: false };
+  var defaults = { level: 1, rudiment: 'mix', five: true, seven: true, complex: false, e_time: true, e_vol: true, e_drift: true, e_sound: true, met: true, countIn: true, clean: true, timer: false };
 
   window.DiscrepancyQuiz = ListenQuiz.start({
     key: 'dq', defaults: defaults, generate: generate,

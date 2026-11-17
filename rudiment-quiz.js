@@ -16,27 +16,35 @@
     return list.length ? list : S.RUDIMENTS.slice();
   }
   function clone(beats) {
-    return beats.map(function (b) { return { grid: b.grid, slots: b.slots.map(function (s) { return s ? s.slice() : null; }) }; });
+    return beats.map(function (b) {
+      var c = { grid: b.grid, slots: b.slots.map(function (s) { return s ? s.slice() : null; }) };
+      if (b.tree) { c.tree = b.tree; c.ats = b.ats; }
+      return c;
+    });
   }
   function endNote() { return S.noteBeat(Math.random() < 0.5 ? [1, 2, 3, 4, 5] : [1 + rnd(5)]); }
 
-  // nBeats of one rudiment, in a home subdivision unless alt is allowed. Null when it does not fit.
-  function seg(ruds, nBeats, alt) {
+  /* nBeats of one rudiment, in a home subdivision unless alt is allowed. Null when it does not fit.
+     mix: { odd: the fivelet and sevenlet grids this level may lay a rudiment over, nest: whether a
+     beat may carry a nested group }. */
+  function seg(ruds, nBeats, alt, mix) {
+    mix = mix || {};
     for (var tries = 0; tries < 30; tries++) {
       var rud = pick(ruds), grids = alt && rud.alt.length && Math.random() < 0.45 ? rud.alt : rud.home;
-      var beats = S.segment(rud, pick(grids), nBeats);
+      if (mix.odd && mix.odd.length && Math.random() < 0.15) grids = mix.odd;
+      var beats = S.segment(rud, pick(grids), nBeats, mix.nest && Math.random() < 0.35);
       if (beats) return beats;
     }
     return S.segment(S.rudiment('single'), 's', nBeats);
   }
   // A beat that strays from the rudiments: any figure, drums moving freely.
-  function strayBeat() {
-    var grid = pick(['s', 's', 't']), mask = M.weighted(M.MASKS[grid]);
+  function strayBeat(mix) {
+    var grid = pick(['s', 's', 't'].concat(mix && mix.odd ? mix.odd : [])), mask = M.weighted(M.MASKS[grid]);
     if (mask.indexOf('1') === -1) mask = grid === 's' ? '1010' : '101';
     return { grid: grid, slots: mask.split('').map(function (c) { return c === '1' ? [1 + rnd(5)] : null; }) };
   }
 
-  function passageBeats(level, ruds, total) {
+  function passageBeats(level, ruds, total, mix) {
     var beats = [], left, n;
     if (level === 1) {
       beats = Math.random() < 0.5 ? seg(ruds, 2) : seg(ruds, 1).concat([endNote()]);
@@ -49,19 +57,19 @@
       ])();
     } else if (level === 3) {
       beats = pick([
-        function () { return seg(ruds, 2, true).concat(seg(ruds, 2, true)); },
-        function () { return seg(ruds, 3, true).concat([endNote()]); },
-        function () { return seg(ruds, 1, true).concat(seg(ruds, 2, true), [endNote()]); },
-        function () { return seg(ruds, 2, true).concat(seg(ruds, 1, true), [endNote()]); }
+        function () { return seg(ruds, 2, true, mix).concat(seg(ruds, 2, true, mix)); },
+        function () { return seg(ruds, 3, true, mix).concat([endNote()]); },
+        function () { return seg(ruds, 1, true, mix).concat(seg(ruds, 2, true, mix), [endNote()]); },
+        function () { return seg(ruds, 2, true, mix).concat(seg(ruds, 1, true, mix), [endNote()]); }
       ])();
       if (Math.random() < 0.25) addRest(beats);
     } else {
       left = total;
       while (left > 0) {
         n = Math.min(left, pick([1, 1, 2, 2]));
-        if (Math.random() < 0.22) { beats.push(strayBeat()); left -= 1; }
+        if (Math.random() < 0.22) { beats.push(strayBeat(mix)); left -= 1; }
         else if (left === 1 && Math.random() < 0.4) { beats.push(endNote()); left -= 1; }
-        else { beats = beats.concat(seg(ruds, n, true)); left -= n; }
+        else { beats = beats.concat(seg(ruds, n, true, mix)); left -= n; }
       }
       if (Math.random() < 0.45) addRest(beats);
       if (Math.random() < 0.2) addRest(beats);
@@ -84,7 +92,7 @@
   function notes(beats) {
     var out = [];
     beats.forEach(function (beat, b) {
-      beat.slots.forEach(function (s, i) { if (s) out.push({ at: b + i / beat.slots.length, drums: s.join('') }); });
+      beat.slots.forEach(function (s, i) { if (s) out.push({ at: b + (beat.ats ? beat.ats[i] : i / beat.slots.length), drums: s.join('') }); });
     });
     return out;
   }
@@ -127,7 +135,7 @@
       if (on.some(function (k) { return slots[k][0] + d < 1 || slots[k][0] + d > 5; })) return null;
       on.forEach(function (k) { slots[k] = [slots[k][0] + d]; });
     } else if (kind === 'grid') {                // sixteenths become a triplet, or a triplet sixteenths
-      if (on.length !== slots.length || singles.length !== on.length) return null;
+      if (beat.tree || on.length !== slots.length || singles.length !== on.length) return null;
       if (beat.grid === 's') { beat.grid = 't'; beat.slots = slots.slice(0, 3); }
       else if (beat.grid === 't') {
         d = slots[2][0] + (slots[2][0] - slots[1][0]);
@@ -155,9 +163,12 @@
     var level = Number(settings.level) || 1, ruds = enabled(settings);
     var total = level === 1 ? 2 : level === 2 ? pick([2, 4, 4]) : level === 3 ? 4 : pick([4, 8, 8]);
     var want = CHOICES[level], answer, bars, tries;
+    // Fivelets from level 3, sevenlets at level 4, nested groups at level 4 with the option on.
+    var odd = [].concat(settings.five && level >= 3 ? ['5'] : [], settings.seven && level >= 4 ? ['7'] : []);
+    var mix = { odd: odd, nest: !!settings.complex && level === 4 };
 
     for (tries = 0; tries < 100; tries++) {
-      answer = passageBeats(level, ruds, total);
+      answer = passageBeats(level, ruds, total, mix);
       bars = S.toBars(answer);
       if (answer.length === total && S.barsValid(bars)) break;
     }
@@ -209,10 +220,10 @@
   var LEVEL_NOTES = {
     1: 'Two beats, slow, one rudiment. Four choices that are easy to tell apart.',
     2: 'Two to four beats, sometimes two rudiments. Four choices.',
-    3: 'Four beats, quicker, rudiments in unusual subdivisions, the odd rest. Six closer choices.',
-    4: 'Four to eight beats, quick, mixed subdivisions, rests and notes that stray from the rudiments. Eight close choices.'
+    3: 'Four beats, quicker, rudiments in unusual subdivisions (fivelets too), the odd rest. Six closer choices.',
+    4: 'Four to eight beats, quick, mixed subdivisions with fivelets and sevenlets, rests and notes that stray from the rudiments. Eight close choices.'
   };
-  var defaults = { level: 1, met: true, countIn: true, names: true, timer: false };
+  var defaults = { level: 1, five: true, seven: true, complex: false, met: true, countIn: true, names: true, timer: false };
   S.RUDIMENTS.forEach(function (r) { defaults['r_' + r.id] = true; });
 
   window.RudimentQuiz = ListenQuiz.start({

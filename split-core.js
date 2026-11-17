@@ -42,35 +42,29 @@
   }
 
   /* Draw one bar into host. opts:
-       len       ticks in the bar (48 = 4/4)
+       len       ticks in the bar (a bar of 4/4 unless told otherwise)
        clef      show the clef and time signature (false for a bar that continues a line)
        open      no bar line at the left (the bar before supplies it)
        markDrum  colour this drum's notes (1-5, or a list of drums)
        zones     add a tap zone behind each note or rest
-     Returns { W, H, centers } in the drawing's own units. */
+       snare     every note on one space, as a snare part (the Rhythm Sandbox)
+     Which notes share a beam, where secondary beams break and which tuplets get a bracket all
+     come from RhythmModel.layout. Returns { W, H, centers } in the drawing's own units. */
+  var BEAM_LEVEL = { 4: 1, 8: 2, 16: 3, 32: 4, 64: 5 };     // VexFlow names each beam by the value above it
+  var TUPLET_POINT = 23;
+  var NOTE_WIDTH = { 1: 15, 2: 18, 3: 19 };                 // room per note, by written value in 64ths
   function engraveBar(host, boxes, opts) {
     opts = opts || {};
     host.innerHTML = '';
     var len = opts.len || M.BAR, mark = cssVar('--mark') || '#1f4fd8', marks = [].concat(opts.markDrum || []);
-    var items = [], beams = [], tuplets = [], run = [], runBeat = -1, groups = {}, order = [], slashes = [];
+    var lay = M.layout(boxes), slashes = [], room = 0, nest = 0;
 
-    function endRun() {
-      if (run.length > 1) {
-        var beam = new VF.Beam(run.map(function (it) { return it.vf; }));
-        beam.render_options.max_slope = 0.12;
-        beam.render_options.min_slope = -0.12;
-        beams.push(beam);
-        run.forEach(function (it) { it.beamed = true; });
-      }
-      run = [];
-    }
-
-    boxes.forEach(function (b) {
-      var dur = (b.t ? M.TUPLET : M.STRAIGHT)[b.d], vf;
+    var items = boxes.map(function (b) {
+      var w = M.written(b), dur = M.VALUE[w], vf;
       if (b.r) {
         vf = new VF.StaveNote({ keys: ['b/4'], duration: dur + 'r', clef: 'percussion' });
       } else {
-        var drums = b.drums && b.drums.length ? b.drums : [3];
+        var drums = opts.snare ? [2] : b.drums && b.drums.length ? b.drums : [3];
         var unison = drums.length === 5;
         var sorted = drums.slice().sort(function (x, y) { return y - x; });   // lowest pitch first
         var keys = unison ? ['b/4'] : sorted.map(function (d) { return KEYS[d - 1]; });
@@ -87,37 +81,39 @@
         }
       }
       if (dur.indexOf('d') !== -1) VF.Dot.buildAndAttach([vf], { all: true });
-      var it = { vf: vf, box: b, beamed: false };
-      // Beams stay inside one beat and never cross a rest; a note on its own keeps its flag.
-      var beat = Math.floor(b.s / BEAT);
-      var beamable = !b.r && b.d < (b.t ? 8 : 12);
-      if (!beamable || beat !== runBeat) endRun();
-      if (beamable) { run.push(it); runBeat = beat; }
-      if (b.t) {
-        var key = b.t.join(':');
-        if (!groups[key]) { groups[key] = []; order.push(key); }
-        groups[key].push(it);
+      room += (NOTE_WIDTH[w] || 23) + (b.flam ? 12 : 0);
+      nest = Math.max(nest, b.g.length);
+      return { vf: vf, box: b };
+    });
+
+    var beams = lay.beams.map(function (bm) {
+      var beam = new VF.Beam(items.slice(bm.from, bm.to + 1).map(function (it) { return it.vf; }));
+      beam.render_options.max_slope = 0.12;   // gentle slopes, as in engraved parts
+      beam.render_options.min_slope = -0.12;
+      if (bm.breaks.length) {
+        // Each beam level stops only at the breaks that do not keep it, so an eighth beam can
+        // carry on over a gap where the sixteenth and thirty-second beams restart.
+        beam.getBeamLines = function (duration) {
+          var level = BEAM_LEVEL[duration];
+          this.break_on_indices = bm.breaks.filter(function (br) { return level > br.keep; }).map(function (br) { return br.after; });
+          return VF.Beam.prototype.getBeamLines.call(this, duration);
+        };
       }
-      items.push(it);
+      return beam;
     });
-    endRun();
-
-    order.forEach(function (key) {
-      var group = groups[key], six = M.isSix(boxes, group[0].box.t);
-      tuplets.push(new VF.Tuplet(group.map(function (it) { return it.vf; }), {
-        num_notes: six ? 6 : 3, notes_occupied: six ? 4 : 2, ratioed: false,
-        bracketed: !group.every(function (it) { return it.beamed; }), location: 1
-      }));
+    // VexFlow's tuplets only give the notes their lengths here; the numbers and brackets are
+    // drawn below, so nested tuplets stack cleanly above the beams.
+    lay.tuplets.forEach(function (tp) {
+      new VF.Tuplet(items.slice(tp.from, tp.to + 1).map(function (it) { return it.vf; }), { num_notes: tp.num, notes_occupied: tp.occ });
     });
 
-    var flams = boxes.filter(function (b) { return b.flam; }).length;
-    var clef = opts.clef !== false;
-    var W = Math.max(clef ? 150 + 60 * len / BEAT : 55 * len / BEAT, (clef ? 150 : 60) + items.length * 23 + flams * 12), H = 158;
+    var clef = opts.clef !== false, lift = Math.max(0, nest - 1) * 20;      // nested tuplets stack upward
+    var W = Math.max(clef ? 140 + 60 * len / BEAT : 55 * len / BEAT, (clef ? 150 : 60) + room), H = 158 + lift;
     var renderer = new VF.Renderer(host, VF.Renderer.Backends.SVG);
     renderer.resize(W, H);
     var ctx = renderer.getContext();
     var left = opts.open ? 0 : 8;
-    var stave = new VF.Stave(left, 34, W - left - (opts.joined ? 0 : 8));
+    var stave = new VF.Stave(left, 34 + lift, W - left - (opts.joined ? 0 : 8));
     if (clef) stave.addClef('percussion').addTimeSignature((len / BEAT) + '/4');
     if (opts.open) stave.setBegBarType(VF.Barline.type.NONE);
     if (opts.last) stave.setEndBarType(VF.Barline.type.END);
@@ -127,17 +123,47 @@
     voice.setMode(VF.Voice.Mode.SOFT);
     voice.addTickables(items.map(function (it) { return it.vf; }));
     new VF.Formatter().joinVoices([voice]).formatToStave([voice], stave);
-    items.forEach(function (it) { if (it.box.r) it.vf.setKeyLine(0, it.box.d === 48 ? 4 : 3); });   // rests on the middle line
+    items.forEach(function (it) { if (it.box.r) it.vf.setKeyLine(0, M.written(it.box) === 64 ? 4 : 3); });   // rests on the middle line
     // The stem of a slash starts at the slash's upper corner, not at the middle line.
     slashes.forEach(function (n) { n.getStem().setOptions({ stem_up_y_base_offset: -SLASH.stem }); });
     voice.draw(ctx, stave);
     beams.forEach(function (bm) { bm.setContext(ctx).draw(); });
-    tuplets.forEach(function (tp) { tp.setContext(ctx).draw(); });
-    // Accents sit above the stem or beam, clear of a tuplet number, as in drum parts.
-    items.forEach(function (it) {
+    // Tuplets, innermost first. Each sits just above everything under it: stems, beams, rests
+    // and any tuplet nested inside it. A number alone when the beam already shows the group,
+    // a bracket with the number in its gap otherwise.
+    var tops = items.map(function (it) {
+      if (it.box.r || M.written(it.box) >= 64) return Math.min(it.vf.getBoundingBox().getY(), stave.getYForLine(0)) - 2;
+      return it.vf.getStemExtents().topY;
+    });
+    lay.tuplets.slice().sort(function (a, b) { return b.depth - a.depth; }).forEach(function (tp) {
+      var first = items[tp.from], last = items[tp.to], top = Infinity, k;
+      for (k = tp.from; k <= tp.to; k++) top = Math.min(top, tops[k]);
+      top = Math.min(top, stave.getYForLine(0) - 4);
+      var edge = function (it, right) {
+        if (it.box.r || M.written(it.box) >= 64) { var bb = it.vf.getBoundingBox(); return bb.getX() + (right ? bb.getW() : 0); }
+        return right ? it.vf.getStemX() + 0.75 : tp.bracket ? it.vf.getAbsoluteX() : it.vf.getStemX();
+      };
+      var x1 = edge(first, false), x2 = edge(last, true), mid = (x1 + x2) / 2;
+      var glyphs = String(tp.num).split('').map(function (d) { return 'timeSig' + d; }), width = 0;
+      var widths = glyphs.map(function (g) { var gw = new VF.Glyph(g, TUPLET_POINT).getMetrics().width; width += gw; return gw; });
+      var line = top - 10, base = line, gx = mid - width / 2;     // the digits are centred on their y
+      ctx.save();
+      ctx.setFillStyle('#000'); ctx.setStrokeStyle('#000');
+      glyphs.forEach(function (g, n) { VF.Glyph.renderGlyph(ctx, gx, base, TUPLET_POINT, g); gx += widths[n]; });
+      if (tp.bracket) {
+        var gap = width / 2 + 5;
+        ctx.fillRect(x1, line, Math.max(0, mid - gap - x1), 1);
+        ctx.fillRect(mid + gap, line, Math.max(0, x2 - mid - gap), 1);
+        ctx.fillRect(x1, line, 1, 7);
+        ctx.fillRect(x2 - 1, line, 1, 7);
+      }
+      ctx.restore();
+      for (k = tp.from; k <= tp.to; k++) tops[k] = line - 9;
+    });
+    // Accents sit above the stem or beam, clear of any tuplet numbers, as in drum parts.
+    items.forEach(function (it, k) {
       if (!it.box.accent || it.box.r) return;
-      var top = it.vf.getStem().getExtents().topY;
-      VF.Glyph.renderGlyph(ctx, it.vf.getAbsoluteX() + 1, Math.max(9, top - (it.box.t ? 19 : 7)), 34, 'articAccentAbove');
+      VF.Glyph.renderGlyph(ctx, it.vf.getAbsoluteX() + 1, Math.max(9, tops[k] - 5), 34, 'articAccentAbove');
     });
 
     var svg = host.querySelector('svg');
@@ -168,13 +194,116 @@
     return { W: W, H: H, centers: centers };
   }
 
+  /* ---------- what the two sandboxes share on screen ---------- */
+
+  // Counts as text: a sextuplet's 3, 4 and 5 carry a small p, + or l; nested counts are smaller.
+  function countLabels(host, parts) {
+    host.textContent = '';
+    parts.forEach(function (p, n) {
+      if (n) host.appendChild(document.createTextNode(' '));
+      var one = host.appendChild(document.createElement('span'));
+      one.className = 'count' + (p.depth ? ' count-in' : '');
+      one.textContent = p.text;
+      if (p.hint) one.appendChild(document.createElement('sup')).textContent = p.hint;
+    });
+  }
+
+  // Show a message for a few seconds. With `prompt`, it gets a button that opens the options.
+  function cue(el, cls, msg, prompt, timer) {
+    clearTimeout(timer);
+    el.hidden = !msg;
+    el.textContent = msg || '';
+    el.className = cls + (prompt ? ' soon' : '');
+    if (msg && prompt) {
+      var btn = el.appendChild(document.createElement('button'));
+      btn.type = 'button';
+      btn.className = 'cue-action';
+      btn.textContent = 'Open options';
+      btn.addEventListener('click', function () { el.hidden = true; prompt(); });
+    }
+    return msg ? setTimeout(function () { el.hidden = true; }, prompt ? 9000 : 5000) : null;
+  }
+
+  /* The two rhythm options, kept in this browser and shared by both sandboxes:
+       complex    "More complicated rhythms": notes down to 64ths, nested tuplets, the 5 and 7 cuts
+       redundant  "Redundant subdivisions": the 4, 6, 8 and 9 cuts
+     and the third scissors button, which holds whichever of those cuts are switched on and opens
+     a small picker. With both options off the button is hidden and the tool bar is as it always was.
+     The page supplies #cut-more, #tool-cutn, #cutn-value, #cut-picker, #opt-complex, #opt-redundant.
+     cfg: tool() the current tool, select(tool), changed(). */
+  function cutMenu(cfg) {
+    var $ = function (id) { return document.getElementById(id); };
+    var opts = { complex: false, redundant: false }, n = null;
+    try {
+      var saved = JSON.parse(localStorage.getItem('bt-rhythm-options') || '{}');
+      opts.complex = saved.complex === true; opts.redundant = saved.redundant === true;
+      n = Number(saved.n) || null;
+    } catch (e) { /* storage unavailable: both off */ }
+    function store() {
+      try { localStorage.setItem('bt-rhythm-options', JSON.stringify({ complex: opts.complex, redundant: opts.redundant, n: n })); } catch (e) { /* ignore */ }
+    }
+    function numbers() {
+      return [4, 5, 6, 7, 8, 9].filter(function (k) { return k === 5 || k === 7 ? opts.complex : opts.redundant; });
+    }
+    var wrap = $('cut-more'), btn = $('tool-cutn'), picker = $('cut-picker');
+    function open(on) {
+      picker.hidden = !on;
+      btn.setAttribute('aria-expanded', on ? 'true' : 'false');
+    }
+    function sync() {
+      var list = numbers();
+      if (list.indexOf(n) === -1) n = list[0] || null;
+      wrap.hidden = !list.length;
+      if (!list.length) open(false);
+      $('cutn-value').textContent = n || '';
+      btn.setAttribute('aria-label', 'Cut in ' + n + '. Tap again to choose another number.');
+      picker.textContent = '';
+      list.forEach(function (k) {
+        var b = picker.appendChild(document.createElement('button'));
+        b.type = 'button';
+        b.className = 'tool pick';
+        b.textContent = k;
+        b.setAttribute('aria-pressed', k === n ? 'true' : 'false');
+        b.setAttribute('aria-label', 'Cut in ' + k);
+        b.addEventListener('click', function () { n = k; store(); sync(); open(false); cfg.select('cutn'); });
+      });
+      $('opt-complex').checked = opts.complex;
+      $('opt-redundant').checked = opts.redundant;
+      if (!list.length && cfg.tool() === 'cutn') cfg.select('cut2');
+    }
+    btn.addEventListener('click', function (e) {
+      e.stopPropagation();
+      if (cfg.tool() === 'cutn') open(picker.hidden);
+      else { cfg.select('cutn'); open(numbers().length > 1); }
+    });
+    document.addEventListener('click', function (e) { if (!picker.hidden && !wrap.contains(e.target)) open(false); });
+    ['complex', 'redundant'].forEach(function (key) {
+      $('opt-' + key).addEventListener('change', function () {
+        opts[key] = this.checked;
+        store(); sync(); cfg.changed();
+      });
+    });
+    sync();
+    return {
+      opts: opts,
+      get n() { return n; },
+      // Bring the "More complicated rhythms" checkbox into view.
+      prompt: function () {
+        var box = $('opt-complex'), menu = box.closest('details');
+        if (menu) menu.open = true;
+        box.focus();
+        if (box.scrollIntoView) box.scrollIntoView({ block: 'center', behavior: 'smooth' });
+      }
+    };
+  }
+
   function drumName(drums) {
     if (!drums || !drums.length) return 'bass 3';
     if (drums.length === 5) return 'unison';
     return 'bass ' + drums.slice().sort().join(' and ');
   }
   function describeBox(list, b) {
-    var value = (b.t ? M.TUPLET_NAME : M.STRAIGHT_NAME)[b.d];
+    var value = M.valueName(b);
     var beat = Math.floor(b.s / BEAT) + 1, name = M.countName(list, b.s);
     var where = b.s % BEAT === 0 ? 'beat ' + beat : 'the ' + (name === '+' ? 'and' : name) + ' of ' + beat;
     if (b.r) return value + ' rest on ' + where;
@@ -227,7 +356,7 @@
     if (busy || !b || b.r) return;
     var a = getAudio();
     if (!a) return;
-    var seq = passage([{ boxes: [{ s: 0, d: 12, r: false, t: null, drums: b.drums, flam: b.flam, accent: b.accent }], len: 12 }]);
+    var seq = passage([{ boxes: [{ s: 0, d: BEAT, r: false, g: [], drums: b.drums, flam: b.flam, accent: b.accent }], len: BEAT }]);
     var now = a.ctx.currentTime + 0.05;
     try { a.voice.output.disconnect(); } catch (e) { /* nothing connected yet */ }
     a.voice.output.connect(a.ctx.destination);
@@ -340,7 +469,9 @@
      A pattern is written as steps from its first drum: [0, 1, 2] is 123, 234 or 345, and played
      the other way it is 321, 432 or 543. Twos and Threes repeat each drum; which drums does not matter.
      home: the subdivisions a rudiment is usually written in (s sixteenths, t triplets, x sextuplets);
-     alt: other subdivisions the harder levels may use. Fours wait for 32nd notes. */
+     alt: other subdivisions the harder levels may use. Fours wait for 32nd notes.
+     From level 3 a rudiment may also be laid over fivelets ('5'), and at level 4 over sevenlets ('7'):
+     the pattern simply keeps cycling across the beats. */
   var RUDIMENTS = [
     { id: 'buguduh', name: 'Buguduh', cell: [0, 1, 2], home: ['t', 'x'], alt: ['s'] },
     { id: 'laser', name: 'Laser Beam', cell: [0, 1, 2, 3], home: ['s'], alt: ['t'] },
@@ -350,7 +481,7 @@
     { id: 'twos', name: 'Twos', group: 2, home: ['s'], alt: ['x'] },
     { id: 'threes', name: 'Threes', group: 3, home: ['t', 'x'], alt: [] }
   ];
-  var PER_BEAT = { s: 4, t: 3, x: 6 };
+  var PER_BEAT = M.PER_BEAT;
   function rudiment(id) { return RUDIMENTS.filter(function (r) { return r.id === id; })[0]; }
 
   // n notes of a rudiment as drum numbers, or null when it does not fit that many notes.
@@ -375,14 +506,41 @@
     return out;
   }
 
-  // Beats are { grid, slots }: one entry per subdivision, each null (nothing) or a list of drums.
-  function segment(rud, grid, nBeats) {
-    var per = PER_BEAT[grid], seq = drumSeq(rud, per * nBeats, grid);
-    if (!seq) return null;
-    var beats = [];
-    for (var b = 0; b < nBeats; b++) {
-      beats.push({ grid: grid, slots: seq.slice(b * per, (b + 1) * per).map(function (d) { return [d]; }) });
+  /* Beats are { grid, slots }: one entry per subdivision, each null (nothing) or a list of drums.
+     A beat with a nested group also has tree (its shape, see RhythmModel.treeBoxes) and ats (where
+     in the beat each slot falls, 0 to 1); its slots are the leaves of the tree in order. */
+  function leafTimes(node, from, len, out) {
+    node.kids.forEach(function (kid, k) {
+      if (kid && kid.kids) leafTimes(kid, from + k * len / node.n, len / node.n, out);
+      else out.push(from + k * len / node.n);
+    });
+    return out;
+  }
+  // A beat on `grid` with a group of 2, 3 or 4 nested in one count, and now and then a second
+  // group inside the first. Never a 5 or a 7, and never more than two layers.
+  function nestedBeat(grid) {
+    var blank = function (n) { var out = []; while (out.length < n) out.push(0); return out; };
+    var tree = { n: PER_BEAT[grid], kids: blank(PER_BEAT[grid]) };
+    var inner = { n: pick([2, 3, 3, 4]), kids: null };
+    inner.kids = blank(inner.n);
+    if (Math.random() < 0.25) { var deep = pick([2, 3]); inner.kids[rnd(inner.n)] = { n: deep, kids: blank(deep) }; }
+    tree.kids[rnd(tree.n)] = inner;
+    var ats = leafTimes(tree, 0, 1, []);
+    return { grid: grid, tree: tree, ats: ats, slots: ats.map(function () { return null; }) };
+  }
+  /* nBeats of one rudiment on a grid. With `nest`, one of the beats gets a nested group and the
+     rudiment runs straight through it. Null when the rudiment does not fit that many notes. */
+  function segment(rud, grid, nBeats, nest) {
+    var beats = [], total = 0, b;
+    var nestAt = nest && (grid === 's' || grid === 't' || grid === 'e') ? rnd(nBeats) : -1;
+    for (b = 0; b < nBeats; b++) {
+      var beat = b === nestAt ? nestedBeat(grid) : { grid: grid, slots: new Array(PER_BEAT[grid]) };
+      total += beat.slots.length;
+      beats.push(beat);
     }
+    var seq = drumSeq(rud, total, grid), k = 0;
+    if (!seq) return null;
+    beats.forEach(function (beat) { for (var i = 0; i < beat.slots.length; i++) beat.slots[i] = [seq[k++]]; });
     return beats;
   }
   function restBeat() { return { grid: 's', slots: [null, null, null, null] }; }
@@ -395,12 +553,15 @@
     for (var b = 0; b < beats.length; b += perBar) {
       var boxes = [];
       beats.slice(b, b + perBar).forEach(function (beat, k) {
-        var grid = beat.grid, slots = beat.slots;
-        // A triplet beat with nothing after the downbeat reads as a plain quarter.
-        var mask = slots.map(function (s) { return s ? '1' : '0'; }).join('');
-        var made = M.beatBoxes(grid, mask, k * BEAT), on = slots.filter(function (s) { return s; }), i = 0;
-        made.forEach(function (bx) { if (!bx.r) bx.drums = on[i++].slice().sort(); });
-        boxes = boxes.concat(made);
+        var i = 0;
+        var fill = function (node) {
+          return { n: node.n, kids: node.kids.map(function (kid) {
+            if (kid && kid.kids) return fill(kid);
+            var drums = beat.slots[i++];
+            return drums ? drums.slice().sort() : null;
+          }) };
+        };
+        boxes = boxes.concat(M.treeBoxes(fill(beat.tree || { n: PER_BEAT[beat.grid], kids: beat.slots }), k * BEAT, BEAT));
       });
       bars.push({ boxes: boxes, len: Math.min(perBar, beats.length - b) * BEAT });
     }
@@ -409,7 +570,7 @@
   function barsValid(bars) { return bars.every(function (bar) { return M.valid(bar.boxes, bar.len); }); }
   function barsKey(bars) {
     return bars.map(function (bar) {
-      return bar.boxes.map(function (b) { return b.s + (b.r ? 'r' : 'n' + (b.drums || []).join('')) + (b.flam ? 'f' : '') + (b.accent ? 'a' : ''); }).join(',');
+      return bar.boxes.map(function (b) { return b.s + ':' + b.d + (b.r ? 'r' : 'n' + (b.drums || []).join('')) + (b.flam ? 'f' : '') + (b.accent ? 'a' : ''); }).join(',');
     }).join('|');
   }
 
@@ -456,10 +617,10 @@
   }
 
   window.SplitCore = {
-    KEYS: KEYS, engraveBar: engraveBar, describeBox: describeBox, drumName: drumName,
+    KEYS: KEYS, engraveBar: engraveBar, countLabels: countLabels, cue: cue, cutMenu: cutMenu, describeBox: describeBox, drumName: drumName,
     passage: passage, audio: getAudio, player: player, preview: preview,
     RUDIMENTS: RUDIMENTS, PER_BEAT: PER_BEAT, rudiment: rudiment, drumSeq: drumSeq, segment: segment,
-    restBeat: restBeat, noteBeat: noteBeat, toBars: toBars, barsValid: barsValid, barsKey: barsKey, identify: identify,
+    nestedBeat: nestedBeat, restBeat: restBeat, noteBeat: noteBeat, toBars: toBars, barsValid: barsValid, barsKey: barsKey, identify: identify,
     rnd: rnd, pick: pick, shuffle: shuffle
   };
 })();

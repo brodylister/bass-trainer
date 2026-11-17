@@ -77,7 +77,10 @@
         <div class="checks">
           <label><input type="checkbox" id="opt-s"><span>Sixteenth notes<small>Counted 1 e + a</small></span></label>
           <label><input type="checkbox" id="opt-t"><span>Eighth-note triplets<small>Counted 1 pul let</small></span></label>
-          <label><input type="checkbox" id="opt-x"><span>Sextuplets<small>Counted 1 pul let + pul let</small></span></label>
+          <label><input type="checkbox" id="opt-x"><span>Sextuplets<small>Counted 1 2 3 4 5 6, where 3, 4 and 5 fall on the triplet's pul, the + and the triplet's let</small></span></label>
+          <label><input type="checkbox" id="opt-five"><span>Fivelets<small>Five to a beat, counted 1 2 3 4 5. Levels 3 and 4</small></span></label>
+          <label><input type="checkbox" id="opt-seven"><span>Sevenlets<small>Seven to a beat, counted 1 to 7. Level 4</small></span></label>
+          <label><input type="checkbox" id="opt-complex"><span>More complicated rhythms<small>Level 4 only: groups of 2, 3 or 4 nested inside a count, up to two layers deep, numbered inside their group</small></span></label>
           <label><input type="checkbox" id="opt-unisons"><span>Unisons and stacks<small>A slash means all five drums; stacked notes mean two or three</small></span></label>
         </div>
       </fieldset>
@@ -100,6 +103,8 @@
 </main>
 
 <script src="vendor/vexflow-bravura.js"></script>
+<script src="rhythm-model.js"></script>
+<script src="split-core.js"></script>
 <script src="app.js"></script>
 <script src="analytics.js"></script>
 </body>

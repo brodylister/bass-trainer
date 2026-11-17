@@ -58,6 +58,10 @@
               <button type="button" id="zoom-out" aria-label="Zoom out">&minus;</button>
               <button type="button" id="zoom-in" aria-label="Zoom in">+</button>
             </div>
+            <div class="checks more-checks">
+              <label><input type="checkbox" id="opt-complex"><span>More complicated rhythms<small>Notes as small as 64ths, tuplets inside tuplets, triplets across beats, and scissors for 5 and 7</small></span></label>
+              <label><input type="checkbox" id="opt-redundant"><span>Redundant subdivisions<small>Scissors for 4, 6, 8 and 9: one cut for what otherwise takes two, such as a half note straight into nine</small></span></label>
+            </div>
             <button type="button" class="ghost" id="clear">Start over</button>
           </div>
         </details>
@@ -87,6 +91,12 @@
         <button type="button" class="tool" data-tool="cut3" aria-pressed="false" aria-label="Cut in 3: tapping a note cuts it into a triplet">
           <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" class="scissors"><circle cx="6" cy="6.5" r="3"/><circle cx="6" cy="17.5" r="3"/><path d="M8.4 8.3 21 19M8.4 15.7 21 5"/></svg><b>3</b>
         </button>
+        <span class="cut-more" id="cut-more" hidden>
+          <button type="button" class="tool" id="tool-cutn" data-tool="cutn" aria-pressed="false" aria-haspopup="true" aria-expanded="false">
+            <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" class="scissors"><circle cx="6" cy="6.5" r="3"/><circle cx="6" cy="17.5" r="3"/><path d="M8.4 8.3 21 19M8.4 15.7 21 5"/></svg><b id="cutn-value"></b><svg viewBox="0 0 10 10" width="9" height="9" aria-hidden="true" class="caret"><path d="M1.5 6.5 5 3l3.5 3.5"/></svg>
+          </button>
+          <span class="cut-picker" id="cut-picker" role="group" aria-label="Other cuts" hidden></span>
+        </span>
         <button type="button" class="tool" data-tool="toggle" aria-pressed="false" aria-label="Note or rest: tapping switches between a note and a rest">
           <span class="glyphs" id="noterest-icon" aria-hidden="true"></span>
         </button>

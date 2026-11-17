@@ -1,19 +1,23 @@
 /* Written Split Quiz (was the Bass Split Trainer) — sheet music trainer
-   Generates one bar of 5-bass split music, engraves it with VexFlow (Bravura),
-   and asks which counts/partials one drum plays. */
+   Generates one bar of 5-bass split music and asks which counts/partials one drum plays.
+   The bar is built as boxes from rhythm-model.js and drawn by SplitCore.engraveBar, the same
+   engraver every module uses. Drums are numbered 0 (bass 1) to 4 (bass 5) in this file. */
 (function () {
   'use strict';
 
-  var VF = Vex.Flow;
+  var M = RhythmModel, S = SplitCore;
   var $ = function (id) { return document.getElementById(id); };
 
-  // Staff positions, bass 1 (highest) to bass 5 (lowest): the four spaces plus below the staff.
-  var KEYS = ['e/5', 'c/5', 'a/4', 'f/4', 'd/4'];
-
+  /* The answer buttons of a beat, by grid. Sixteenths "1 e + a", triplets "1 pul let"; sextuplets,
+     fivelets and sevenlets are numbered, and a sextuplet's 3, 4 and 5 carry the small hints p, + and l
+     (the triplet's pul, the +, the triplet's let). 'e' is a beat in two eighths, used under nested groups. */
   var GRIDS = {
-    s: { slots: 4, span: 3, labels: function (b) { return [String(b), 'e', '+', 'a']; } },
-    t: { slots: 3, span: 4, labels: function (b) { return [String(b), 'pul', 'let']; } },
-    x: { slots: 6, span: 2, labels: function (b) { return [String(b), 'pul', 'let', '+', 'pul', 'let']; } }
+    e: { n: 2, labels: function (b) { return [b, '+']; } },
+    s: { n: 4, labels: function (b) { return [b, 'e', '+', 'a']; } },
+    t: { n: 3, labels: function (b) { return [b, 'pul', 'let']; } },
+    x: { n: 6, labels: function (b) { return [b, '2', '3', '4', '5', '6']; }, hints: ['', '', 'p', '+', 'l', ''] },
+    5: { n: 5, labels: function (b) { return [b, '2', '3', '4', '5']; } },
+    7: { n: 7, labels: function (b) { return [b, '2', '3', '4', '5', '6', '7']; } }
   };
 
   // Rhythm figures per beat, weighted toward what shows up in real bass books.
@@ -22,7 +26,8 @@
         ['1000', 4], ['0010', 3], ['0011', 3], ['1100', 3], ['0101', 2], ['0110', 2], ['0001', 2],
         ['0100', 1], ['0000', 2]],
     t: [['111', 10], ['101', 4], ['110', 3], ['011', 3], ['001', 2], ['010', 1]],
-    x: [['111111', 10], ['011111', 2], ['111110', 2], ['110110', 1], ['101101', 1], ['110111', 1], ['111011', 1]]
+    x: [['111111', 10], ['011111', 2], ['111110', 2], ['110110', 1], ['101101', 1], ['110111', 1], ['111011', 1]],
+    5: M.MASKS[5], 7: M.MASKS[7]
   };
   // Level 1 keeps to the figures a first-year player sees.
   var EASY_MASKS = {
@@ -88,7 +93,7 @@
 
   /* ---------- settings and stats (kept in this browser only) ---------- */
 
-  var DEFAULTS = { drum: 'random', s: true, t: true, x: false, unisons: true, highlight: false, timer: false, level: 2, v: 2 };
+  var DEFAULTS = { drum: 'random', s: true, t: true, x: false, five: true, seven: true, complex: false, unisons: true, highlight: false, timer: false, level: 2, v: 2 };
   var settings = load('bst-settings', DEFAULTS);
   // The timer used to be on by default. Turn it off once for browsers that saved the old default.
   try {
@@ -121,14 +126,66 @@
     return pairs[pairs.length - 1][0];
   }
 
+  /* One beat's written form as boxes. Sixteenths, triplets and sextuplets keep the level rules
+     of notate(); fivelets, sevenlets and nested groups are written the plain way (notes ring to the
+     next note), or at level 4 sometimes with short notes and rests. Drums become 1 to 5. */
+  function beatBoxes(beat, start, level) {
+    var onsets = beat.slots.filter(function (x) { return x; }), k = 0, boxes;
+    if (!beat.tree && (beat.grid === 's' || beat.grid === 't' || beat.grid === 'x')) {
+      var text = notate(beat.grid, beat.slots, level).map(function (tok) { return (tok[0] === 'r' ? 'r' : '') + tok.slice(1); }).join(' ');
+      boxes = M.parse(beat.grid === 's' ? text : '[' + text + ']');
+      boxes.forEach(function (b) {
+        b.s += start;
+        b.g.forEach(function (t) { t[0] += start; });
+        if (!b.r) b.drums = (onsets[k++] || [0]).map(function (d) { return d + 1; });
+      });
+      return boxes;
+    }
+    var fill = function (node) {
+      return { n: node.n, kids: node.kids.map(function (kid) {
+        if (kid && kid.kids) return fill(kid);
+        var drums = beat.slots[k++];
+        return drums ? drums.map(function (d) { return d + 1; }) : null;
+      }) };
+    };
+    var tree = fill(beat.tree || { n: GRIDS[beat.grid].n, kids: beat.slots.map(function () { return 0; }) });
+    return M.treeBoxes(tree, start, M.BEAT, level === 4 && Math.random() < 0.3 ? 'short' : 'ring');
+  }
+
+  /* A beat with a group of 2, 3 or 4 nested in one of its counts, and sometimes a second group
+     nested in the first: two layers at most, never a 5 or a 7. Only with "More complicated
+     rhythms" at level 4. Returns { grid, tree } where every leaf is 0 (to be filled with a note). */
+  function nestedShape(grids) {
+    var base = weighted(grids), leaf = function (n) { var out = []; while (out.length < n) out.push(0); return out; };
+    if (base === 's' && Math.random() < 0.5) base = 'e';            // nest in an eighth as often as in a sixteenth
+    var tree = { n: GRIDS[base].n, kids: leaf(GRIDS[base].n) };
+    var inner = { n: weighted([[2, 3], [3, 4], [4, 2]]), kids: null };
+    inner.kids = leaf(inner.n);
+    tree.kids[rnd(tree.n)] = inner;
+    if (Math.random() < 0.3) inner.kids[rnd(inner.n)] = { n: weighted([[2, 3], [3, 2]]), kids: null };
+    inner.kids.forEach(function (kid) { if (kid && kid.kids === null) kid.kids = leaf(kid.n); });
+    return { grid: base, tree: tree };
+  }
+  function leaves(node) {
+    var n = 0;
+    node.kids.forEach(function (kid) { n += kid && kid.kids ? leaves(kid) : 1; });
+    return n;
+  }
+
   function generateBar() {
+    var level = Number(settings.level) || 2;
     var grids = [];
     if (settings.s) grids.push(['s', 6]);
     if (settings.t) grids.push(['t', 3]);
     if (settings.x) grids.push(['x', 2]);
     if (!grids.length) grids.push(['s', 1]);
+    var nestable = grids.filter(function (g) { return g[0] !== 'x'; });
+    if (!nestable.length) nestable = [['s', 1]];
+    // Fivelets join in from level 3 and sevenlets at level 4, unless switched off.
+    if (settings.five && level >= 3) grids.push(['5', 1.5]);
+    if (settings.seven && level >= 4) grids.push(['7', 1]);
+    var nesting = settings.complex && level === 4, nested = 0;
 
-    var level = Number(settings.level) || 2;
     // How the line moves through the drums for this bar.
     var per = weighted(level === 1 ? [[1, 5], [2, 4]]
       : level === 4 ? [[1, 4], [2, 3], [3, 1], [4, 1], [0, 5]]
@@ -160,18 +217,26 @@
       return cur;
     }
 
-    var beats = [];
+    var beats = [], boxes = [];
     for (var b = 0; b < 4; b++) {
-      var grid = weighted(grids);
-      var table = level === 1 ? EASY_MASKS[grid] : (grid === 'x' && level === 2) ? FULL_SIX : MASKS[grid];
-      var mask = weighted(table);
+      var shape = nesting && nested < 2 && Math.random() < (nested ? 0.25 : 0.6) ? nestedShape(nestable) : null;
+      var grid = shape ? shape.grid : weighted(grids), mask;
+      if (shape) {
+        nested++;
+        mask = '';
+        while (mask.length < leaves(shape.tree)) mask += '1';
+      } else {
+        var table = level === 1 ? EASY_MASKS[grid] : (grid === 'x' && level === 2) ? FULL_SIX : MASKS[grid];
+        mask = weighted(table);
+      }
+      var busy = grid === 'x' || grid === '5' || grid === '7' || shape;   // crowded beats stay cleaner
       var slots = [];
       for (var i = 0; i < mask.length; i++) {
         if (mask[i] === '0') { slots.push(null); continue; }
         // Levels 1-2 keep sextuplets clean: unisons only on the downbeat, no stacks.
         var plain = i > 0 && (level === 1 || (level === 2 && grid === 'x'));
-        if (!plain && Math.random() < unisonRate * (i === 0 ? 2 : 0.6)) slots.push([0, 1, 2, 3, 4]);
-        else if (!plain && !(level === 2 && grid === 'x') && Math.random() < stackRate) {
+        if (!plain && Math.random() < unisonRate * (i === 0 ? 2 : busy ? 0.3 : 0.6)) slots.push([0, 1, 2, 3, 4]);
+        else if (!plain && !(level === 2 && grid === 'x') && Math.random() < stackRate * (busy && grid !== 'x' ? 0.5 : 1)) {
           // A stack: two (sometimes three) drums on the same note.
           var a = nextDrum(), stack = [a];
           var extra = Math.random() < 0.2 ? 2 : 1;
@@ -181,10 +246,12 @@
         else slots.push([nextDrum()]);
       }
       // A triplet beat with nothing after the downbeat reads as a plain quarter.
-      if (grid === 't' && !slots[1] && !slots[2]) { grid = 's'; slots = [slots[0], null, null, null]; }
-      beats.push({ grid: grid, slots: slots, tokens: notate(grid, slots, level) });
+      if (!shape && grid === 't' && !slots[1] && !slots[2]) { grid = 's'; slots = [slots[0], null, null, null]; }
+      var beat = { grid: grid, slots: slots, tree: shape ? shape.tree : null };
+      boxes = boxes.concat(beatBoxes(beat, b * M.BEAT, level));
+      beats.push(beat);
     }
-    return { beats: beats };
+    return { beats: beats, boxes: boxes };
   }
 
   function drumSlots(bar, drum) {
@@ -203,7 +270,7 @@
   function newQuestion() {
     for (var tries = 0; tries < 200; tries++) {
       var bar = generateBar();
-      if (onsetCount(bar) < 4) continue;
+      if (onsetCount(bar) < 4 || !M.valid(bar.boxes)) continue;
       var playing = [0, 1, 2, 3, 4].filter(function (d) { return drumSlots(bar, d).length > 0; });
       if (playing.length < 3) continue;
       var target;
@@ -213,159 +280,69 @@
     }
     // Practically unreachable; fall back to a plain run so the page never stalls.
     var fb = { beats: [0, 1, 2, 3].map(function (b) {
-      return { grid: 's', slots: [0, 1, 2, 3].map(function (i) { return [(b * 4 + i) % 5]; }), tokens: ['n16', 'n16', 'n16', 'n16'] };
-    }) };
+      return { grid: 's', slots: [0, 1, 2, 3].map(function (i) { return [(b * 4 + i) % 5]; }), tree: null };
+    }), boxes: [] };
+    fb.beats.forEach(function (beat, b) { fb.boxes = fb.boxes.concat(beatBoxes(beat, b * M.BEAT, 2)); });
     var t = settings.drum === 'random' ? rnd(5) : Number(settings.drum);
     return { bar: fb, target: t, answer: drumSlots(fb, t) };
   }
 
   /* ---------- engraving ---------- */
 
-  function cssVar(name) {
-    return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
-  }
-
-  // Unison slash: a thin, steep stroke a little taller than two staff spaces, as Sibelius draws it.
-  var SLASH = { width: 10, reach: 12, thick: 7, stem: 8 };
-  VF.SLASH_NOTEHEAD_WIDTH = SLASH.width;
-  function drawSlash() {
-    var ctx = this.checkContext();
-    this.setRendered();
-    var x = this.getAbsoluteX(), y = this.y;
-    this.applyStyle(ctx);
-    ctx.beginPath();
-    ctx.moveTo(x, y + SLASH.reach);
-    ctx.lineTo(x, y + SLASH.reach - SLASH.thick);
-    ctx.lineTo(x + SLASH.width, y - SLASH.reach);
-    ctx.lineTo(x + SLASH.width, y - SLASH.reach + SLASH.thick);
-    ctx.closePath();
-    ctx.fill();
-    this.restoreStyle(ctx);
-  }
-
   function engrave(host, bar, markDrum) {
-    host.innerHTML = '';
-    var mark = cssVar('--mark') || '#1f4fd8';
-    var all = [], beams = [], tuplets = [], rests = [], slashes = [];
-
-    function rest(dur) {
-      var r = new VF.StaveNote({ keys: ['b/4'], duration: dur + 'r', clef: 'percussion' });
-      if (dur.indexOf('d') !== -1) VF.Dot.buildAndAttach([r], { all: true });
-      rests.push(r);
-      return r;
-    }
-    function note(drums, dur) {
-      var unison = drums.length === 5;   // all five drums: one slash on the middle line
-      var sorted = unison ? [markDrum] : drums.slice().sort(function (a, b) { return b - a; }); // lowest pitch first
-      var n = new VF.StaveNote({
-        keys: unison ? ['b/4'] : sorted.map(function (d) { return KEYS[d]; }),
-        duration: dur, type: unison ? 's' : 'n', clef: 'percussion', stem_direction: 1
-      });
-      if (dur.indexOf('d') !== -1) VF.Dot.buildAndAttach([n], { all: true });
-      if (unison) { n.note_heads[0].draw = drawSlash; slashes.push(n); }
-      if (markDrum !== null && markDrum !== undefined) {
-        var idx = sorted.indexOf(markDrum);
-        if (idx !== -1) {
-          if (sorted.length === 1) n.setStyle({ fillStyle: mark, strokeStyle: mark });
-          else n.setKeyStyle(idx, { fillStyle: mark, strokeStyle: mark });
-        }
-      }
-      return n;
-    }
-
-    bar.beats.forEach(function (beat) {
-      var onsets = beat.slots.filter(function (x) { return x; }), k = 0;
-      var beatNotes = [], run = [], beamed = 0;
-      // Beams never cross a rest; a note left on its own keeps its flag.
-      function endRun() {
-        if (run.length > 1) {
-          var beam = new VF.Beam(run);
-          beam.render_options.max_slope = 0.12;   // gentle slopes, as in engraved parts
-          beam.render_options.min_slope = -0.12;
-          beams.push(beam);
-          beamed += run.length;
-        }
-        run = [];
-      }
-      beat.tokens.forEach(function (tok) {
-        var dur = tok.slice(1);
-        if (tok[0] === 'r') { endRun(); beatNotes.push(rest(dur)); return; }
-        var sn = note(onsets[k++], dur);
-        beatNotes.push(sn);
-        if (dur === 'q') endRun(); else run.push(sn);
-      });
-      endRun();
-      if (beat.grid !== 's') {
-        tuplets.push(new VF.Tuplet(beatNotes, {
-          num_notes: beat.grid === 't' ? 3 : 6,
-          notes_occupied: beat.grid === 't' ? 2 : 4,
-          ratioed: false,
-          bracketed: beamed !== beatNotes.length,
-          location: 1
-        }));
-      }
-      all = all.concat(beatNotes);
+    var g = S.engraveBar(host, bar.boxes, {
+      markDrum: markDrum === null || markDrum === undefined ? [] : markDrum + 1,
+      label: 'One bar of bass drum music in 4/4'
     });
-
-    var W = Math.max(380, 150 + all.length * 23);
-    var H = 150;
-    var renderer = new VF.Renderer(host, VF.Renderer.Backends.SVG);
-    renderer.resize(W, H);
-    var ctx = renderer.getContext();
-    var stave = new VF.Stave(8, 34, W - 16);
-    stave.addClef('percussion').addTimeSignature('4/4');
-    stave.setContext(ctx).draw();
-
-    var voice = new VF.Voice({ num_beats: 4, beat_value: 4 });
-    voice.setMode(VF.Voice.Mode.SOFT);
-    voice.addTickables(all);
-    new VF.Formatter().joinVoices([voice]).formatToStave([voice], stave);
-    rests.forEach(function (r) { r.setKeyLine(0, 3); });
-    // The stem of a slash starts at the slash's upper corner, not at the middle line.
-    slashes.forEach(function (n) { n.getStem().setOptions({ stem_up_y_base_offset: -SLASH.stem }); });   // keep rests on the middle line
-    voice.draw(ctx, stave);
-    beams.forEach(function (bm) { bm.setContext(ctx).draw(); });
-    tuplets.forEach(function (tp) { tp.setContext(ctx).draw(); });
-
     var svg = host.querySelector('svg');
-    svg.setAttribute('viewBox', '0 0 ' + W + ' ' + H);
-    svg.removeAttribute('width');
-    svg.removeAttribute('height');
-    svg.style.width = '100%';
-    svg.style.minWidth = Math.round(W * 0.92) + 'px';   // dense bars keep their size and scroll sideways
-    svg.style.maxWidth = Math.round(W * 1.5) + 'px';
+    svg.style.minWidth = Math.round(g.W * 0.92) + 'px';   // dense bars keep their size and scroll sideways
     var sheet = host.parentNode;
     sheet.scrollLeft = 0;
     $('scroll-hint').hidden = sheet.scrollWidth <= sheet.clientWidth + 1;
-    svg.style.height = 'auto';
-    svg.setAttribute('role', 'img');
-    svg.setAttribute('aria-label', 'One bar of bass drum music in 4/4');
   }
 
   /* ---------- interface ---------- */
 
   var q = null, selected = {}, phase = 'answer', startedAt = 0, ticker = null;
 
+  /* The answer pad: one row per beat, one button per count, each as wide as its share of the beat.
+     A nested group sits inside a thin frame with its number; its first button keeps the name of the
+     count it starts on and the rest are numbered 2, 3, 4 inside the group. */
   function buildPad() {
     var pad = $('pad');
     pad.innerHTML = '';
     q.bar.beats.forEach(function (beat, b) {
-      var g = GRIDS[beat.grid];
+      var g = GRIDS[beat.grid], names = g.labels(String(b + 1)), leaf = 0;
       var row = document.createElement('div');
-      row.className = 'pad-row';
+      row.className = 'pad-row' + (beat.tree ? ' pad-nested' : '');
       row.setAttribute('role', 'group');
       row.setAttribute('aria-label', 'Beat ' + (b + 1));
-      g.labels(b + 1).forEach(function (label, i) {
+      function button(host, label, hint, share, first, inner) {
         var btn = document.createElement('button');
         btn.type = 'button';
-        btn.className = 'slot' + (i === 0 ? ' slot-beat' : '');
-        btn.style.gridColumn = 'span ' + g.span;
+        btn.className = 'slot' + (first ? ' slot-beat' : '') + (inner ? ' slot-in' : '');
+        btn.style.flexGrow = Math.max(1, Math.round(share * 420));
         btn.textContent = label;
-        btn.dataset.key = b + '-' + i;
+        if (hint) btn.appendChild(document.createElement('sup')).textContent = hint;
+        btn.dataset.key = b + '-' + (leaf++);
         btn.setAttribute('aria-pressed', 'false');
-        btn.setAttribute('aria-label', i === 0 ? 'Beat ' + label : 'Beat ' + (b + 1) + ', ' + label);
-        row.appendChild(btn);
-      });
+        btn.setAttribute('aria-label', first ? 'Beat ' + label : 'Beat ' + (b + 1) + ', ' + label + (inner ? ' of the nested group' : ''));
+        host.appendChild(btn);
+      }
+      (function walk(node, host, labels, hints, share, depth) {
+        node.kids.forEach(function (kid, i) {
+          if (kid && kid.kids) {
+            var frame = document.createElement('span');
+            frame.className = 'pad-group';
+            frame.style.flexGrow = Math.max(1, Math.round(share * 420));
+            frame.dataset.n = kid.n;
+            host.appendChild(frame);
+            var inner = [labels[i]];
+            while (inner.length < kid.n) inner.push(String(inner.length + 1));
+            walk(kid, frame, inner, [], share / kid.n, depth + 1);
+          } else button(host, labels[i], hints[i], share, depth === 0 && i === 0, depth > 0 && i > 0);
+        });
+      })(beat.tree || { n: g.n, kids: beat.slots }, row, names, g.hints || [], 1 / (beat.tree ? beat.tree.n : g.n), 0);
       pad.appendChild(row);
     });
   }
@@ -472,8 +449,8 @@
   var LEVEL_NOTES = {
     1: 'Simple figures. Runs move one way through the drums. Unisons only on the beat.',
     2: 'All figures, no rests inside a beat. Sextuplets are always full.',
-    3: 'Some figures are written with a rest inside the beat. Sextuplets can have gaps.',
-    4: 'Short notes with rests, broken-up rests, more unisons, stacks and scattered splits.'
+    3: 'Some figures are written with a rest inside the beat. Sextuplets can have gaps. Fivelets join in.',
+    4: 'Short notes with rests, broken-up rests, more unisons, stacks and scattered splits. Fivelets and sevenlets.'
   };
   function syncOptions() {
     Array.prototype.forEach.call(document.querySelectorAll('input[name="drum"]'), function (r) {
@@ -482,8 +459,9 @@
     Array.prototype.forEach.call(document.querySelectorAll('input[name="level"]'), function (r) {
       r.checked = Number(r.value) === Number(settings.level);
     });
-    $('level-note').textContent = LEVEL_NOTES[settings.level] || '';
-    ['s', 't', 'x', 'unisons', 'highlight', 'timer'].forEach(function (k) { $('opt-' + k).checked = !!settings[k]; });
+    $('level-note').textContent = (LEVEL_NOTES[settings.level] || '') +
+      (settings.complex && Number(settings.level) === 4 ? ' Nested groups are on.' : '');
+    ['s', 't', 'x', 'five', 'seven', 'complex', 'unisons', 'highlight', 'timer'].forEach(function (k) { $('opt-' + k).checked = !!settings[k]; });
   }
 
   $('options').addEventListener('change', function (e) {
@@ -503,6 +481,9 @@
     var sheet = $('staff').parentNode;
     $('scroll-hint').hidden = sheet.scrollWidth <= sheet.clientWidth + 1;
   });
+
+  // For tests and the browser console.
+  window.SplitQuiz = { settings: settings, generate: newQuestion, next: next, get question() { return q; } };
 
   syncOptions();
   next();

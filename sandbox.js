@@ -3,8 +3,8 @@
    Each box is as wide as its note lasts. A note box has a green line where it is struck and a red
    "cooldown" for the wait until the next thing on the page. A rest box has no green line.
 
-   Time is counted in ticks: 12 to a beat, 48 to the bar. That makes a sixteenth 3 ticks, a triplet
-   eighth 4 and a triplet sixteenth 2, so every length the sandbox allows is a whole number. */
+   The bar itself (cutting, fusing, counting) lives in rhythm-model.js and the engraving in
+   split-core.js, both shared with the other modules. */
 (function () {
   'use strict';
 
@@ -12,10 +12,9 @@
   var $ = function (id) { return document.getElementById(id); };
 
   // The model (cutting, fusing, counting) lives in rhythm-model.js, shared with the Split Sandbox.
-  var M = RhythmModel;
-  var BEAT = M.BEAT, BAR = M.BAR, STRAIGHT = M.STRAIGHT, TUPLET = M.TUPLET;
-  var STRAIGHT_NAME = M.STRAIGHT_NAME, TUPLET_NAME = M.TUPLET_NAME;
-  var copy = M.copy, cut = M.cut, fuse = M.fuse, toggleRest = M.toggleRest, isSix = M.isSix, valid = M.valid;
+  var M = RhythmModel, S = SplitCore;
+  var BEAT = M.BEAT, BAR = M.BAR;
+  var copy = M.copy, cut = M.cut, fuse = M.fuse, toggleRest = M.toggleRest, valid = M.valid;
   var countName = M.countName, counts = M.counts, parse = M.parse;
   var MASKS = M.MASKS, weighted = M.weighted, beatBoxes = M.beatBoxes;
 
@@ -48,7 +47,8 @@
     for (var tries = 0; tries < 50; tries++) {
       var out = [], hits = 0;
       for (var beat = 0; beat < 4; beat++) {
-        var grid = weighted([['s', 6], ['t', 3], ['x', 1]]);
+        // Fivelets and sevenlets join in once "More complicated rhythms" is on.
+        var grid = weighted([['s', 6], ['t', 3], ['x', 1]].concat(menu.opts.complex ? [['5', 1], ['7', 1]] : []));
         out = out.concat(beatBoxes(grid, weighted(MASKS[grid]), beat * BEAT));
       }
       out.forEach(function (b) { if (!b.r) hits++; });
@@ -66,7 +66,8 @@
   try {
     var saved = JSON.parse(localStorage.getItem('bcs-state') || 'null');
     if (saved) {
-      if (Array.isArray(saved.boxes) && valid(saved.boxes)) { boxes = copy(saved.boxes); example = saved.example; }
+      var kept = M.upgrade(saved.boxes);          // bars saved before nested tuplets used a coarser grid
+      if (valid(kept)) { boxes = copy(kept); example = saved.example; }
       Object.keys(prefs).forEach(function (k) { if (k in (saved.prefs || {})) prefs[k] = saved.prefs[k]; });
     }
   } catch (e) { /* storage unavailable: start from the first example */ }
@@ -76,7 +77,7 @@
 
   var popAt = null;
   function commit(result, keepExample) {
-    if (result.msg) { cue(result.msg, result.soon); return false; }
+    if (result.msg) { cue(result.msg, result.need); return false; }
     past.push({ boxes: boxes, example: example });
     if (past.length > 200) past.shift();
     future = [];
@@ -100,114 +101,25 @@
     cue(''); render();
   }
 
+  // A message under the boxes. One that an option would lift comes with a button to that option.
   var cueTimer = null;
-  function cue(msg, soon) {
-    var el = $('cue');
-    clearTimeout(cueTimer);
-    el.hidden = !msg;
-    el.textContent = msg || '';
-    el.className = 'cue' + (soon ? ' soon' : '');
-    if (msg) cueTimer = setTimeout(function () { el.hidden = true; }, 5000);
-  }
+  function cue(msg, need) { cueTimer = S.cue($('cue'), 'cue', msg, need && menu.prompt, cueTimer); }
 
   /* ---------- engraving: snare style, every note on one space ---------- */
 
   var geom = { W: 380, centers: [] };
 
   function engrave() {
-    var host = $('staff');
-    host.innerHTML = '';
-    var items = [], beams = [], tuplets = [], run = [], runBeat = -1, groups = {}, order = [];
-
-    function endRun() {
-      if (run.length > 1) {
-        var beam = new VF.Beam(run.map(function (it) { return it.vf; }));
-        beam.render_options.max_slope = 0.12;
-        beam.render_options.min_slope = -0.12;
-        beams.push(beam);
-        run.forEach(function (it) { it.beamed = true; });
-      }
-      run = [];
-    }
-
-    boxes.forEach(function (b) {
-      var dur = (b.t ? TUPLET : STRAIGHT)[b.d];
-      var vf = new VF.StaveNote({ keys: [b.r ? 'b/4' : 'c/5'], duration: dur + (b.r ? 'r' : ''), clef: 'percussion', stem_direction: 1 });
-      if (dur.indexOf('d') !== -1) VF.Dot.buildAndAttach([vf], { all: true });
-      var it = { vf: vf, box: b, beamed: false };
-      // Beams stay inside one beat and never cross a rest; a note on its own keeps its flag.
-      var beat = Math.floor(b.s / BEAT);
-      var beamable = !b.r && b.d < (b.t ? 8 : 12);
-      if (!beamable || beat !== runBeat) endRun();
-      if (beamable) { run.push(it); runBeat = beat; }
-      if (b.t) {
-        var key = b.t.join(':');
-        if (!groups[key]) { groups[key] = []; order.push(key); }
-        groups[key].push(it);
-      }
-      items.push(it);
-    });
-    endRun();
-
-    order.forEach(function (key) {
-      var group = groups[key], span = Number(key.split(':')[1]);
-      var six = isSix(boxes, group[0].box.t);
-      tuplets.push(new VF.Tuplet(group.map(function (it) { return it.vf; }), {
-        num_notes: six ? 6 : 3, notes_occupied: six ? 4 : 2, ratioed: false,
-        bracketed: !group.every(function (it) { return it.beamed; }), location: 1
-      }));
-    });
-
-    var W = Math.max(380, 150 + items.length * 23), H = 150;
-    var renderer = new VF.Renderer(host, VF.Renderer.Backends.SVG);
-    renderer.resize(W, H);
-    var ctx = renderer.getContext();
-    var stave = new VF.Stave(8, 34, W - 16);
-    stave.addClef('percussion').addTimeSignature('4/4');
-    stave.setContext(ctx).draw();
-
-    var voice = new VF.Voice({ num_beats: 4, beat_value: 4 });
-    voice.setMode(VF.Voice.Mode.SOFT);
-    voice.addTickables(items.map(function (it) { return it.vf; }));
-    new VF.Formatter().joinVoices([voice]).formatToStave([voice], stave);
-    items.forEach(function (it) { if (it.box.r) it.vf.setKeyLine(0, it.box.d === 48 ? 4 : 3); });
-    voice.draw(ctx, stave);
-    beams.forEach(function (bm) { bm.setContext(ctx).draw(); });
-    tuplets.forEach(function (tp) { tp.setContext(ctx).draw(); });
-
-    var svg = host.querySelector('svg');
-    svg.setAttribute('viewBox', '0 0 ' + W + ' ' + H);
-    svg.removeAttribute('width');
-    svg.removeAttribute('height');
-    svg.style.width = '100%';
-    svg.style.minWidth = Math.round(W * 0.92) + 'px';   // dense bars keep their size and scroll sideways
-    svg.style.maxWidth = Math.round(W * 1.5) + 'px';
-    svg.style.height = 'auto';
-    svg.setAttribute('role', 'img');
-    svg.setAttribute('aria-label', 'One bar of music in 4/4: ' + describeBar());
-
-    // A tap zone behind each note, reaching halfway to its neighbours.
-    geom.W = W;
-    geom.centers = items.map(function (it) { return it.vf.getAbsoluteX() + 6; });
-    var NS = 'http://www.w3.org/2000/svg', first = svg.firstChild;
-    geom.centers.forEach(function (c, i) {
-      var left = i === 0 ? Math.max(0, c - 26) : (geom.centers[i - 1] + c) / 2;
-      var right = i === geom.centers.length - 1 ? W : (c + geom.centers[i + 1]) / 2;
-      var rect = document.createElementNS(NS, 'rect');
-      rect.setAttribute('class', 'zone');
-      rect.setAttribute('data-i', i);
-      rect.setAttribute('x', left); rect.setAttribute('y', 14);
-      rect.setAttribute('width', right - left); rect.setAttribute('height', H - 28);
-      rect.setAttribute('rx', 4);
-      svg.insertBefore(rect, first);
-    });
-
+    var g = S.engraveBar($('staff'), boxes, { snare: true, zones: true, label: 'One bar of music in 4/4: ' + describeBar() });
+    var svg = $('staff').querySelector('svg');
+    svg.style.minWidth = Math.round(g.W * 0.92) + 'px';   // dense bars keep their size and scroll sideways
+    geom = g;
     var sheet = $('sheet');
     $('scroll-hint').hidden = sheet.scrollWidth <= sheet.clientWidth + 1;
   }
 
   function describe(b) {
-    return (b.t ? TUPLET_NAME : STRAIGHT_NAME)[b.d] + (b.r ? ' rest' : ' note') + ' on ' + spoken(countName(boxes, b.s), b.s);
+    return M.valueName(b) + (b.r ? ' rest' : ' note') + ' on ' + spoken(countName(boxes, b.s), b.s);
   }
   function spoken(name, tick) {
     var beat = Math.floor(tick / BEAT) + 1;
@@ -226,31 +138,50 @@
     return d;
   }
 
+  var MIN_BOX = 22;       // the narrowest a box may get, in pixels, so it can still be tapped
+
   function renderBoxes() {
     var host = $('boxes'), focus = document.activeElement && document.activeElement.classList.contains('box')
       ? Number(document.activeElement.dataset.i) : null;
-    rows = host.clientWidth < 560 ? [[0, 24], [24, BAR]] : [[0, BAR]];   // narrow screens: two beats per row
+    var wide = host.clientWidth, scrolled = false;
+    rows = wide < 560 ? [[0, BAR / 2], [BAR / 2, BAR]] : [[0, BAR]];   // narrow screens: two beats per row
     host.innerHTML = '';
     rows.forEach(function (r) {
       var row = el('row', host), span = r[1] - r[0];
       var pct = function (tick) { return ((tick - r[0]) / span * 100) + '%'; };
+      var clip = function (s, d) { return [Math.max(s, r[0]), Math.min(s + d, r[1])]; };
       row.dataset.s = r[0]; row.dataset.e = r[1];
+      // A row with very short notes grows wider than the screen and scrolls, so every box stays big enough to tap.
+      var smallest = span;
+      boxes.forEach(function (b) { var c = clip(b.s, b.d); if (c[1] > c[0]) smallest = Math.min(smallest, b.d); });
+      var need = Math.ceil(MIN_BOX * span / smallest);
+      if (need > wide) { row.style.width = need + 'px'; scrolled = true; }
 
       for (var beat = r[0] / BEAT; beat < r[1] / BEAT; beat++) {
         var bg = el('beat', row);
         bg.style.left = pct(beat * BEAT); bg.style.width = (BEAT / span * 100) + '%';
         bg.appendChild(document.createElement('b')).textContent = beat + 1;
       }
+      // One shade per tuplet; a nested tuplet lies over its parent's shade and so reads darker.
       var seen = {};
       boxes.forEach(function (b) {
-        if (!b.t || seen[b.t.join(':')] || b.t[0] < r[0] || b.t[0] >= r[1]) return;
-        seen[b.t.join(':')] = true;
-        var shade = el('tup', row);
-        shade.style.left = pct(b.t[0]); shade.style.width = (b.t[1] / span * 100) + '%';
-        shade.appendChild(document.createElement('b')).textContent = isSix(boxes, b.t) ? '6' : '3';
+        b.g.forEach(function (t, depth) {
+          var chain = b.g.slice(0, depth + 1), key = chain.map(function (x) { return x.join(':'); }).join('/');
+          var c = clip(t[0], t[1]);
+          if (seen[key] || c[1] <= c[0]) return;
+          seen[key] = true;
+          var shade = el('tup' + (depth ? ' tup-in' : ''), row);
+          shade.style.left = pct(c[0]); shade.style.width = ((c[1] - c[0]) / span * 100) + '%';
+          if (depth) shade.style.top = (18 + Math.min(depth, 3) * 3) + 'px';
+          if (c[0] === t[0]) {
+            var tag = shade.appendChild(document.createElement('b'));
+            tag.textContent = M.shown(boxes, chain);
+            if (!depth && t[1] > BEAT) tag.style.left = (BEAT / 2 / (c[1] - c[0]) * 100) + '%';   // clear of the next beat's number
+          }
+        });
       });
       boxes.forEach(function (b, i) {
-        var s = Math.max(b.s, r[0]), e = Math.min(b.s + b.d, r[1]);
+        var c = clip(b.s, b.d), s = c[0], e = c[1];
         if (s >= e) return;
         var box = el('box' + (b.r ? ' rest' : '') + (s > b.s ? ' cont-l' : '') + (e < b.s + b.d ? ' cont-r' : ''), row);
         box.style.left = pct(s); box.style.width = 'calc(' + ((e - s) / span * 100) + '% - ' + (s > b.s || e < b.s + b.d ? 1.5 : 3) + 'px)';
@@ -271,6 +202,8 @@
       }
       el('playhead', row).hidden = true;
     });
+    host.classList.toggle('is-wide', scrolled);
+    $('boxes-hint').hidden = !scrolled;
     popAt = null;
     if (focus !== null) {
       var again = host.querySelector('.box[role="button"][data-i="' + Math.min(focus, boxes.length - 1) + '"]');
@@ -284,8 +217,9 @@
     counts(boxes).forEach(function (c, beat) {
       var chip = el('chip' + (c.state === 'play' ? '' : ' is-empty'), host);
       chip.appendChild(document.createElement('small')).textContent = 'Beat ' + (beat + 1);
-      chip.appendChild(document.createElement('span')).textContent =
-        c.state === 'play' ? c.names.join(' ') : c.state === 'hold' ? 'hold' : 'rest';
+      var line = chip.appendChild(document.createElement('span'));
+      if (c.state === 'play') S.countLabels(line, c.parts);
+      else line.textContent = c.state === 'hold' ? 'hold' : 'rest';
       if (c.state === 'play') said.push(c.names.join(' '));
     });
     $('count-text').textContent = said.length ? 'Play on ' + said.join(', ') + '.' : 'Nothing is played in this bar.';
@@ -296,9 +230,10 @@
     cut3: 'Tap a box or a note to cut it in 3.',
     toggle: 'Tap a box or a note to switch it between a note and a rest.'
   };
+  function cutBy() { return tool === 'cut3' ? 3 : tool === 'cutn' ? menu.n : 2; }
   function renderControls() {
-    ['cut2', 'cut3', 'toggle'].forEach(function (t) { $('tool-' + t).setAttribute('aria-pressed', tool === t ? 'true' : 'false'); });
-    $('tool-hint').textContent = TOOL_HINTS[tool] + ' Hold the line between two boxes to fuse them.';
+    ['cut2', 'cut3', 'cutn', 'toggle'].forEach(function (t) { $('tool-' + t).setAttribute('aria-pressed', tool === t ? 'true' : 'false'); });
+    $('tool-hint').textContent = (TOOL_HINTS[tool] || 'Tap a box or a note to cut it in ' + menu.n + '.') + ' Hold the line between two boxes to fuse them.';
     $('undo').disabled = !past.length;
     $('redo').disabled = !future.length;
     Array.prototype.forEach.call($('example-grid').children, function (btn, i) {
@@ -333,6 +268,7 @@
       if (!best || gap < best.gap) best = { row: row, rc: rc, gap: gap };
     });
     if (!best || best.gap > 12) return null;
+    best.rc = best.row.getBoundingClientRect();
     var s = Number(best.row.dataset.s), e2 = Number(best.row.dataset.e);
     var perTick = best.rc.width / (e2 - s);
     var tick = Math.min(e2 - 0.001, Math.max(s, s + (e.clientX - best.rc.left) / perTick));
@@ -381,11 +317,11 @@
   }
   function useTool(i) {
     if (tool === 'toggle') commit(toggleRest(boxes, i));
-    else commit(cut(boxes, i, tool === 'cut3' ? 3 : 2));
+    else commit(cut(boxes, i, cutBy(), menu.opts));
   }
   function fuseCut(cutAt) {
     if (cutAt === null) { cue('Hold on the line between two boxes to fuse them.'); return; }
-    if (commit(fuse(boxes, cutAt)) && navigator.vibrate) { try { navigator.vibrate(12); } catch (e) { /* ignore */ } }
+    if (commit(fuse(boxes, cutAt, menu.opts)) && navigator.vibrate) { try { navigator.vibrate(12); } catch (e) { /* ignore */ } }
   }
   function endPress() {
     if (!press) return;
@@ -455,6 +391,12 @@
 
   ['cut2', 'cut3', 'toggle'].forEach(function (t) {
     $('tool-' + t).addEventListener('click', function () { tool = t; cue(''); renderControls(); });
+  });
+  // The third scissors and the two rhythm options, shared with the Split Sandbox.
+  var menu = S.cutMenu({
+    tool: function () { return tool; },
+    select: function (t) { tool = t; cue(''); renderControls(); },
+    changed: function () { cue(''); renderControls(); }
   });
   $('undo').addEventListener('click', undo);
   $('redo').addEventListener('click', redo);
@@ -650,7 +592,7 @@
   if (window.ResizeObserver) {
     var lastWide = null;
     new ResizeObserver(function () {
-      var wide = $('boxes').clientWidth >= 560;
+      var wide = $('boxes').clientWidth;
       if (wide !== lastWide) { lastWide = wide; renderBoxes(); }
       $('scroll-hint').hidden = $('sheet').scrollWidth <= $('sheet').clientWidth + 1;
     }).observe($('boxes'));

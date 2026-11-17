@@ -1,7 +1,7 @@
 /* Split Sandbox
    Write a bass split straight onto the staff and hear it on five bass drums.
-   The bottom tools (cut in 2, cut in 3, note or rest) are the Rhythm Sandbox's, through the same
-   rhythm-model.js, plus flam and accent. The top tools choose which drum a tapped note is written on.
+   The bottom tools (cut in 2, cut in 3, the extra cuts the options switch on, note or rest) are the
+   Rhythm Sandbox's, through the same rhythm-model.js, plus flam and accent. The top tools choose which drum a tapped note is written on.
    The music sits on a board that can be dragged in any direction; the tools float over it. */
 (function () {
   'use strict';
@@ -33,8 +33,9 @@
   try {
     var saved = JSON.parse(localStorage.getItem('ssb-state') || 'null');
     if (saved) {
-      if (Array.isArray(saved.bars) && saved.bars.length >= 1 && saved.bars.length <= MAX_BARS &&
-          saved.bars.every(function (b) { return Array.isArray(b) && M.valid(b) && b.every(okBox); })) bars = copyBars(saved.bars);
+      var kept = Array.isArray(saved.bars) ? saved.bars.map(M.upgrade) : [];   // bars saved before nested tuplets used a coarser grid
+      if (kept.length >= 1 && kept.length <= MAX_BARS &&
+          kept.every(function (b) { return Array.isArray(b) && M.valid(b) && b.every(okBox); })) bars = copyBars(kept);
       Object.keys(prefs).forEach(function (k) { if (k in (saved.prefs || {})) prefs[k] = saved.prefs[k]; });
       if (!ZOOMS[prefs.zoom]) prefs.zoom = 2;
     }
@@ -53,7 +54,7 @@
   }
   // Apply a model result ({ boxes } or { msg }) to bar n.
   function commitBar(n, result) {
-    if (result.msg) { cue(result.msg, result.soon); return false; }
+    if (result.msg) { cue(result.msg, result.need); return false; }
     var next = bars.slice();
     next[n] = result.boxes;
     commit(next);
@@ -63,14 +64,7 @@
   function redo() { if (!future.length) return; past.push(bars); bars = future.pop(); cue(''); render(); }
 
   var cueTimer = null;
-  function cue(msg, soon) {
-    var el = $('cue');
-    clearTimeout(cueTimer);
-    el.hidden = !msg;
-    el.textContent = msg || '';
-    el.className = 'cue board-cue' + (soon ? ' soon' : '');
-    if (msg) cueTimer = setTimeout(function () { el.hidden = true; }, 5000);
-  }
+  function cue(msg, need) { cueTimer = S.cue($('cue'), 'cue board-cue', msg, need && menu.prompt, cueTimer); }
 
   /* ---------- drawing ---------- */
 
@@ -113,7 +107,7 @@
     Array.prototype.forEach.call(document.querySelectorAll('[data-tool]'), function (btn) {
       btn.setAttribute('aria-pressed', btn.dataset.tool === tool ? 'true' : 'false');
     });
-    $('tool-hint').textContent = TOOL_HINTS[tool] + ' Hold between two notes to fuse them.';
+    $('tool-hint').textContent = (TOOL_HINTS[tool] || 'Tap a note to cut it in ' + menu.n + '.') + ' Hold between two notes to fuse them.';
     $('undo').disabled = !past.length;
     $('redo').disabled = !future.length;
     $('bars-value').textContent = bars.length;
@@ -158,7 +152,7 @@
 
   function useTool(at) {
     var list = bars[at.bar], b = list[at.i], out;
-    if (tool === 'cut2' || tool === 'cut3') { commitBar(at.bar, M.cut(list, at.i, tool === 'cut3' ? 3 : 2)); return; }
+    if (tool.slice(0, 3) === 'cut') { commitBar(at.bar, M.cut(list, at.i, tool === 'cut3' ? 3 : tool === 'cutn' ? menu.n : 2, menu.opts)); return; }
     if (tool === 'toggle') {
       out = M.toggleRest(list, at.i);
       if (!out.boxes[at.i].r && !out.boxes[at.i].drums) out.boxes[at.i].drums = [3];
@@ -185,7 +179,7 @@
   }
   function fuseCut(at) {
     if (!at || at.cut === null) { cue('Hold between two notes in the same bar to fuse them.'); return; }
-    if (commitBar(at.bar, M.fuse(bars[at.bar], at.cut)) && navigator.vibrate) { try { navigator.vibrate(12); } catch (e) { /* ignore */ } }
+    if (commitBar(at.bar, M.fuse(bars[at.bar], at.cut, menu.opts)) && navigator.vibrate) { try { navigator.vibrate(12); } catch (e) { /* ignore */ } }
   }
   function endPress() {
     if (!press) return;
@@ -263,7 +257,13 @@
   /* ---------- tools and board controls ---------- */
 
   Array.prototype.forEach.call(document.querySelectorAll('[data-tool]'), function (btn) {
+    if (btn.dataset.tool === 'cutn') return;       // the third scissors is wired up by the shared cut menu
     btn.addEventListener('click', function () { tool = btn.dataset.tool; cue(''); renderControls(); });
+  });
+  var menu = S.cutMenu({
+    tool: function () { return tool; },
+    select: function (t) { tool = t; cue(''); renderControls(); },
+    changed: function () { cue(''); renderControls(); }
   });
   $('undo').addEventListener('click', undo);
   $('redo').addEventListener('click', redo);
